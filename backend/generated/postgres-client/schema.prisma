@@ -1,0 +1,551 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/postgres-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Work {
+  id                     Int                         @id @default(autoincrement())
+  name                   String
+  address                String
+  cep                    String
+  startDate              DateTime
+  ppcTargetPct           Float                       @default(80)
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+  weeks                  Week[]
+  holidays               Holiday[]
+  assignments            UserWorkRole[]
+  contractors            Contractor[]
+  causes                 Cause[]
+  locations              Location[]
+  taskGroups             TaskGroup[]
+  authRequests           FutureWeekAuthorization[]
+  profileAssignments     UserProfileAssignment[]
+  perceivedQualityConfig WorkPerceivedQualityConfig?
+  feasibility            WorkFeasibility?
+  feasibilitySnapshots   WorkFeasibilitySnapshot[]
+}
+
+model User {
+  id                     Int                       @id @default(autoincrement())
+  name                   String
+  email                  String                    @unique
+  passwordHash           String
+  isActive               Boolean                   @default(true)
+  contractorId           Int?
+  contractor             Contractor?               @relation(fields: [contractorId], references: [id])
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  assignments            UserWorkRole[]
+  auditEvents            AuditEvent[]
+  planningClosedWeeks    Week[]                    @relation("WeekPlanningClosedBy")
+  prePlanningClosedWeeks Week[]                    @relation("WeekPrePlanningClosedBy")
+  feedbackClosedWeeks    Week[]                    @relation("WeekFeedbackClosedBy")
+  qualityClosedWeeks     Week[]                    @relation("WeekQualityClosedBy")
+  reopenedWeeks          Week[]                    @relation("WeekReopenedBy")
+  reopenRequests         ReopenRequest[]           @relation("ReopenRequestedBy")
+  reopenApprovals        ReopenRequest[]           @relation("ReopenApprovedBy")
+  canceledTasks          Task[]                    @relation("TaskCanceledBy")
+  feedbacksSubmitted     Feedback[]                @relation("FeedbackSubmittedBy")
+  futureWeekRequests     FutureWeekAuthorization[] @relation("FutureWeekRequestedBy")
+  futureWeekApprovals    FutureWeekAuthorization[] @relation("FutureWeekApprovedBy")
+  roleAssignmentsMade    UserWorkRole[]            @relation("RoleAssignedBy")
+  profileAssignments     UserProfileAssignment[]   @relation("UserProfileAssignments")
+  profileAssignmentsMade UserProfileAssignment[]   @relation("ProfileAssignedBy")
+  closedPpcMeetings      WeekPpcMeeting[]          @relation("WeekPpcMeetingClosedBy")
+}
+
+model UserWorkRole {
+  id           Int                     @id @default(autoincrement())
+  userId       Int
+  workId       Int
+  role         String
+  startsAt     DateTime                @default(now())
+  endsAt       DateTime?
+  assignedById Int?
+  assignedBy   User?                   @relation("RoleAssignedBy", fields: [assignedById], references: [id])
+  user         User                    @relation(fields: [userId], references: [id])
+  work         Work                    @relation(fields: [workId], references: [id])
+  profileLinks UserProfileAssignment[] @relation("RoleAssignmentProfileLinks")
+
+  @@index([userId, workId, role])
+  @@index([workId, role, startsAt])
+}
+
+model PermissionProfile {
+  id          Int                     @id @default(autoincrement())
+  name        String                  @unique
+  description String
+  baseRole    String
+  isSystem    Boolean                 @default(false)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  permissions ProfilePermission[]
+  assignments UserProfileAssignment[]
+}
+
+model ProfilePermission {
+  id            Int               @id @default(autoincrement())
+  profileId     Int
+  permissionKey String
+  profile       PermissionProfile @relation(fields: [profileId], references: [id])
+
+  @@unique([profileId, permissionKey])
+  @@index([permissionKey])
+}
+
+model UserProfileAssignment {
+  id               Int               @id @default(autoincrement())
+  userId           Int
+  workId           Int
+  profileId        Int
+  startsAt         DateTime          @default(now())
+  endsAt           DateTime?
+  assignedById     Int?
+  roleAssignmentId Int?
+  user             User              @relation("UserProfileAssignments", fields: [userId], references: [id])
+  work             Work              @relation(fields: [workId], references: [id])
+  profile          PermissionProfile @relation(fields: [profileId], references: [id])
+  assignedBy       User?             @relation("ProfileAssignedBy", fields: [assignedById], references: [id])
+  roleAssignment   UserWorkRole?     @relation("RoleAssignmentProfileLinks", fields: [roleAssignmentId], references: [id])
+
+  @@index([userId, workId, startsAt])
+  @@index([workId, profileId, startsAt])
+}
+
+model ContractorFunction {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  contractors Contractor[]
+}
+
+model Contractor {
+  id                      Int                        @id @default(autoincrement())
+  workId                  Int
+  name                    String
+  contact                 String?
+  functionId              Int?
+  work                    Work                       @relation(fields: [workId], references: [id])
+  function                ContractorFunction?        @relation(fields: [functionId], references: [id])
+  tasks                   Task[]
+  preTasks                PreTask[]
+  ppcMeetingAttendances   PpcMeetingAttendance[]
+  perceivedQualityItems   WeekPerceivedQualityItem[]
+  users                   User[]
+  defaultInTaskGroupItems TaskGroupItem[]            @relation("TaskGroupItemDefaultContractor")
+
+  @@unique([workId, name])
+}
+
+model Location {
+  id       Int       @id @default(autoincrement())
+  workId   Int
+  level1   String
+  level2   String
+  work     Work      @relation(fields: [workId], references: [id])
+  tasks    Task[]
+  preTasks PreTask[]
+
+  @@unique([workId, level1, level2])
+}
+
+model Cause {
+  id          Int        @id @default(autoincrement())
+  workId      Int?
+  description String
+  work        Work?      @relation(fields: [workId], references: [id])
+  feedbacks   Feedback[]
+
+  @@index([workId, description])
+}
+
+model TaskGroup {
+  id        Int             @id @default(autoincrement())
+  workId    Int?
+  name      String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  work      Work?           @relation(fields: [workId], references: [id])
+  items     TaskGroupItem[]
+
+  @@index([workId, name])
+}
+
+model TaskGroupItem {
+  id                  Int         @id @default(autoincrement())
+  taskGroupId         Int
+  sequenceNumber      Int
+  description         String
+  defaultContractorId Int?
+  defaultSupervisor   String?
+  defaultLocationL1   String?
+  defaultLocationL2   String?
+  taskGroup           TaskGroup   @relation(fields: [taskGroupId], references: [id])
+  defaultContractor   Contractor? @relation("TaskGroupItemDefaultContractor", fields: [defaultContractorId], references: [id])
+
+  @@unique([taskGroupId, sequenceNumber])
+}
+
+model Week {
+  id                    Int                        @id @default(autoincrement())
+  workId                Int
+  weekNumber            Int
+  year                  Int
+  startDate             DateTime
+  endDate               DateTime
+  prePlanningStatus     String                     @default("OPEN")
+  prePlanningClosedAt   DateTime?
+  prePlanningClosedById Int?
+  prePlanningClosedBy   User?                      @relation("WeekPrePlanningClosedBy", fields: [prePlanningClosedById], references: [id])
+  planningStatus        String                     @default("OPEN")
+  feedbackStatus        String                     @default("OPEN")
+  qualityStatus         String                     @default("OPEN")
+  planningClosedAt      DateTime?
+  planningClosedById    Int?
+  planningClosedBy      User?                      @relation("WeekPlanningClosedBy", fields: [planningClosedById], references: [id])
+  feedbackClosedAt      DateTime?
+  feedbackClosedById    Int?
+  feedbackClosedBy      User?                      @relation("WeekFeedbackClosedBy", fields: [feedbackClosedById], references: [id])
+  qualityClosedAt       DateTime?
+  qualityClosedById     Int?
+  qualityClosedBy       User?                      @relation("WeekQualityClosedBy", fields: [qualityClosedById], references: [id])
+  reopenedAt            DateTime?
+  reopenedById          Int?
+  reopenedBy            User?                      @relation("WeekReopenedBy", fields: [reopenedById], references: [id])
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  work                  Work                       @relation(fields: [workId], references: [id])
+  originTasks           Task[]                     @relation("OriginWeekTasks")
+  originPreTasks        PreTask[]                  @relation("OriginWeekPreTasks")
+  currentTasks          Task[]                     @relation("CurrentWeekTasks")
+  preTasks              PreTask[]                  @relation("WeekPreTasks")
+  feedbacks             Feedback[]
+  weatherDays           WeekWeatherDay[]
+  perceivedQualityItems WeekPerceivedQualityItem[]
+  ppcMeeting            WeekPpcMeeting?
+  reopenRequests        ReopenRequest[]
+
+  @@unique([workId, weekNumber])
+  @@index([workId, year, weekNumber])
+}
+
+model WeekPpcMeeting {
+  id          Int                    @id @default(autoincrement())
+  weekId      Int                    @unique
+  meetingAt   DateTime?
+  minutes     String?
+  isClosed    Boolean                @default(false)
+  closedAt    DateTime?
+  closedById  Int?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  week        Week                   @relation(fields: [weekId], references: [id])
+  closedBy    User?                  @relation("WeekPpcMeetingClosedBy", fields: [closedById], references: [id])
+  attendances PpcMeetingAttendance[]
+}
+
+model PpcMeetingAttendance {
+  id           Int            @id @default(autoincrement())
+  meetingId    Int
+  contractorId Int
+  present      Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  meeting      WeekPpcMeeting @relation(fields: [meetingId], references: [id])
+  contractor   Contractor     @relation(fields: [contractorId], references: [id])
+
+  @@unique([meetingId, contractorId])
+  @@index([contractorId])
+}
+
+model WeekWeatherDay {
+  id                          Int      @id @default(autoincrement())
+  weekId                      Int
+  dayDate                     DateTime
+  weekday                     String
+  icon                        String
+  tempMinC                    Float?
+  tempMaxC                    Float?
+  precipitationMm             Float?
+  precipitationProbabilityPct Float?
+  week                        Week     @relation(fields: [weekId], references: [id])
+
+  @@unique([weekId, dayDate])
+}
+
+model Holiday {
+  id          Int      @id @default(autoincrement())
+  workId      Int
+  dayDate     DateTime
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  work        Work     @relation(fields: [workId], references: [id])
+
+  @@unique([workId, dayDate])
+  @@index([workId, dayDate])
+}
+
+model Task {
+  id               Int              @id @default(autoincrement())
+  sequenceNumber   Int
+  originWeekId     Int
+  currentWeekId    Int
+  contractorId     Int?
+  supervisor       String?
+  locationId       Int?
+  description      String
+  plannedStart     DateTime?
+  plannedEnd       DateTime?
+  actualStart      DateTime?
+  actualEnd        DateTime?
+  status           String           @default("PLANNED")
+  isUnplanned      Boolean          @default(false)
+  rolledFromTaskId Int?
+  canceledAt       DateTime?
+  canceledById     Int?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  originWeek       Week             @relation("OriginWeekTasks", fields: [originWeekId], references: [id])
+  currentWeek      Week             @relation("CurrentWeekTasks", fields: [currentWeekId], references: [id])
+  contractor       Contractor?      @relation(fields: [contractorId], references: [id])
+  location         Location?        @relation(fields: [locationId], references: [id])
+  rolledFromTask   Task?            @relation("TaskRollForward", fields: [rolledFromTaskId], references: [id])
+  rolledToTasks    Task[]           @relation("TaskRollForward")
+  canceledBy       User?            @relation("TaskCanceledBy", fields: [canceledById], references: [id])
+  plannedDays      TaskPlannedDay[]
+  feedbacks        Feedback[]
+
+  @@index([currentWeekId, sequenceNumber])
+  @@index([originWeekId])
+  @@index([contractorId, currentWeekId])
+}
+
+model PreTask {
+  id             Int                 @id @default(autoincrement())
+  sequenceNumber Int
+  originWeekId   Int
+  weekId         Int
+  contractorId   Int?
+  supervisor     String?
+  locationId     Int?
+  description    String
+  plannedStart   DateTime?
+  plannedEnd     DateTime?
+  status         String              @default("PLANNED")
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  originWeek     Week                @relation("OriginWeekPreTasks", fields: [originWeekId], references: [id])
+  week           Week                @relation("WeekPreTasks", fields: [weekId], references: [id])
+  contractor     Contractor?         @relation(fields: [contractorId], references: [id])
+  location       Location?           @relation(fields: [locationId], references: [id])
+  plannedDays    PreTaskPlannedDay[]
+
+  @@index([weekId, sequenceNumber])
+  @@index([originWeekId])
+  @@index([contractorId, weekId])
+}
+
+model PreTaskPlannedDay {
+  id          Int       @id @default(autoincrement())
+  preTaskId   Int
+  weekday     String
+  plannedDate DateTime?
+  preTask     PreTask   @relation(fields: [preTaskId], references: [id])
+
+  @@unique([preTaskId, weekday])
+}
+
+model TaskPlannedDay {
+  id          Int       @id @default(autoincrement())
+  taskId      Int
+  weekday     String
+  plannedDate DateTime?
+  actualDate  DateTime?
+  task        Task      @relation(fields: [taskId], references: [id])
+
+  @@unique([taskId, weekday])
+}
+
+model Feedback {
+  id            Int      @id @default(autoincrement())
+  taskId        Int
+  weekId        Int
+  status        String
+  causeId       Int?
+  comments      String?
+  submittedAt   DateTime @default(now())
+  submittedById Int?
+  task          Task     @relation(fields: [taskId], references: [id])
+  week          Week     @relation(fields: [weekId], references: [id])
+  cause         Cause?   @relation(fields: [causeId], references: [id])
+  submittedBy   User?    @relation("FeedbackSubmittedBy", fields: [submittedById], references: [id])
+
+  @@unique([taskId, weekId])
+  @@index([weekId, status])
+}
+
+model ReopenRequest {
+  id            Int       @id @default(autoincrement())
+  weekId        Int
+  requestedById Int
+  requestedAt   DateTime  @default(now())
+  reason        String?
+  status        String    @default("PENDING")
+  approvedById  Int?
+  approvedAt    DateTime?
+  rejectedAt    DateTime?
+  week          Week      @relation(fields: [weekId], references: [id])
+  requestedBy   User      @relation("ReopenRequestedBy", fields: [requestedById], references: [id])
+  approvedBy    User?     @relation("ReopenApprovedBy", fields: [approvedById], references: [id])
+
+  @@index([weekId, status, requestedAt])
+}
+
+model FutureWeekAuthorization {
+  id                  Int       @id @default(autoincrement())
+  workId              Int
+  requestedWeekNumber Int
+  requestedById       Int
+  requestedAt         DateTime  @default(now())
+  reason              String?
+  status              String    @default("PENDING")
+  approvedById        Int?
+  approvedAt          DateTime?
+  rejectedAt          DateTime?
+  work                Work      @relation(fields: [workId], references: [id])
+  requestedBy         User      @relation("FutureWeekRequestedBy", fields: [requestedById], references: [id])
+  approvedBy          User?     @relation("FutureWeekApprovedBy", fields: [approvedById], references: [id])
+
+  @@index([workId, requestedWeekNumber, status])
+}
+
+model NotificationRule {
+  id                         Int      @id @default(autoincrement())
+  workId                     Int?
+  prePlanningDeadlineWeekday String?
+  prePlanningDeadlineTime    String?
+  ppcMeetingDeadlineWeekday  String?
+  ppcMeetingDeadlineTime     String?
+  planningDeadlineWeekday    String?
+  planningDeadlineTime       String?
+  feedbackDeadlineWeekday    String?
+  feedbackDeadlineTime       String?
+  qualityDeadlineWeekday     String?
+  qualityDeadlineTime        String?
+  emailRecipients            String
+  enabled                    Boolean  @default(true)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@unique([workId])
+}
+
+model WeekPerceivedQualityItem {
+  id                     Int        @id @default(autoincrement())
+  weekId                 Int
+  contractorId           Int
+  qualityScore           Int?
+  collaborationTeamScore Int?
+  safetyScore            Int?
+  cleaningScore          Int?
+  comments               String?
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+  week                   Week       @relation(fields: [weekId], references: [id])
+  contractor             Contractor @relation(fields: [contractorId], references: [id])
+
+  @@unique([weekId, contractorId])
+  @@index([contractorId, weekId])
+}
+
+model AppConfig {
+  id                  Int      @id @default(autoincrement())
+  companyName         String
+  companyCnpj         String
+  companyAddress      String
+  companyCep          String?
+  companyStreet       String?
+  companyNeighborhood String?
+  companyCity         String?
+  companyState        String?
+  companyNumber       String?
+  companyComplement   String?
+  companySite         String?
+  logoPath            String?
+  updatedAt           DateTime @updatedAt
+}
+
+model WorkPerceivedQualityConfig {
+  id                               Int      @id @default(autoincrement())
+  workId                           Int      @unique
+  deadlineRegularPct               Float?
+  deadlineGoodPct                  Float?
+  qualityRegularScore              Int?
+  qualityGoodScore                 Int?
+  collaborationPresenceImpactScore Int?
+  collaborationRegularScore        Int?
+  collaborationGoodScore           Int?
+  safetyRegularScore               Int?
+  safetyGoodScore                  Int?
+  cleaningRegularScore             Int?
+  cleaningGoodScore                Int?
+  createdAt                        DateTime @default(now())
+  updatedAt                        DateTime @updatedAt
+  work                             Work     @relation(fields: [workId], references: [id])
+}
+
+model WorkFeasibility {
+  id                     Int       @id @default(autoincrement())
+  workId                 Int       @unique
+  analysisDate           DateTime?
+  totalInvestment        Float     @default(0)
+  expectedRevenue        Float     @default(0)
+  expectedOperatingCosts Float     @default(0)
+  expectedDurationMonths Int       @default(0)
+  riskLevel              String    @default("MEDIUM")
+  notes                  String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  work                   Work      @relation(fields: [workId], references: [id])
+}
+
+model WorkFeasibilitySnapshot {
+  id                  Int      @id @default(autoincrement())
+  workId              Int
+  referenceDate       DateTime
+  plannedProgressPct  Float    @default(0)
+  actualProgressPct   Float    @default(0)
+  plannedCostAccum    Float    @default(0)
+  actualCostAccum     Float    @default(0)
+  plannedRevenueAccum Float    @default(0)
+  actualRevenueAccum  Float    @default(0)
+  status              String   @default("ON_TRACK")
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  work                Work     @relation(fields: [workId], references: [id])
+
+  @@unique([workId, referenceDate])
+  @@index([workId, referenceDate])
+}
+
+model AuditEvent {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  workId      Int?
+  entityType  String
+  entityId    Int?
+  eventType   String
+  description String
+  metadata    String?
+  createdAt   DateTime @default(now())
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([workId, entityType, createdAt])
+}

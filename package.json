@@ -1,0 +1,38 @@
+{
+  "name": "ppc-pro",
+  "version": "0.1.0",
+  "private": true,
+  "main": "desktop/main.js",
+  "scripts": {
+    "start": "node backend/index.js",
+    "backend": "node backend/index.js",
+    "open:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/open-ppc-pro.ps1",
+    "stop:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-ppc-pro.ps1",
+    "shortcuts:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-desktop-shortcuts.ps1",
+    "db:generate": "prisma generate --schema backend/prisma/schema.prisma",
+    "db:generate:pg": "prisma generate --schema backend/prisma/schema.postgres.prisma",
+    "db:migrate": "prisma migrate dev --schema backend/prisma/schema.prisma",
+    "db:migrate:pg": "prisma migrate dev --schema backend/prisma/schema.postgres.prisma",
+    "db:push": "prisma db push --schema backend/prisma/schema.prisma --accept-data-loss",
+    "db:push:pg": "prisma db push --schema backend/prisma/schema.postgres.prisma",
+    "db:seed": "node backend/prisma/seed.js",
+    "db:seed:pg": "node backend/prisma/seed.js",
+    "db:bootstrap:prod": "node backend/prisma/bootstrap-prod.js",
+    "db:clone:to:pg": "node scripts/clone-sqlite-to-postgres.js",
+    "db:seed:history": "node backend/prisma/seed-dashboard-history.js",
+    "desktop": "echo \"Desktop app sera reconectado apos estabilizar backend\"",
+    "build": "echo \"Add build steps here\""
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "prisma": "^5.17.0",
+    "@prisma/client": "^5.17.0",
+    "jsonwebtoken": "^9.0.0",
+    "bcryptjs": "^2.4.3",
+    "pdfkit": "^0.15.2",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: ppc-pro-web
+    env: node
+    plan: free
+    region: oregon
+    rootDir: .
+    buildCommand: npm ci && npm run db:generate:pg
+    preDeployCommand: npm run db:push:pg
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_PROVIDER
+        value: postgres
+      - key: JWT_SECRET
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ppc-pro-db
+          property: connectionString
+
+databases:
+  - name: ppc-pro-db
+    databaseName: ppc_pro
+    user: ppc_pro_user
+    plan: free
+    region: oregon

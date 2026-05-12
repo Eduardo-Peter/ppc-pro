@@ -1,0 +1,2079 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PPC-Pro V1</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-badge">PPC</div>
+      <div>
+        <h1>PPC-Pro V1</h1>
+        <p>Planejamento de curto prazo</p>
+      </div>
+    </div>
+    <div id="sessionInfo">Sem sessão</div>
+  </header>
+
+  <main class="wrap">
+    <section class="panel login" id="loginView">
+      <h2>Entrar</h2>
+      <form id="loginForm" class="stack">
+        <label>Email
+          <input id="email" type="email" value="admin@ppc.local" required />
+        </label>
+        <label>Senha
+          <input id="password" type="password" value="admin123" required />
+        </label>
+        <button type="submit">Acessar</button>
+      </form>
+      <small>
+        Perfis teste:
+        <code>admin@ppc.local</code>,
+        <code>engenharia@ppc.local</code>,
+        <code>controller@ppc.local</code>,
+        <code>diretoria@ppc.local</code>,
+        <code>empreiteiro@ppc.local</code>,
+        <code>visualizador@ppc.local</code>.
+      </small>
+    </section>
+
+    <section class="panel hidden" id="gatewayView">
+      <h2 id="gatewayTitle">Escolha da Obra</h2>
+      <p id="gatewaySubtitle">Selecione uma opção e clique em prosseguir.</p>
+
+      <div id="adminGateway" class="hidden">
+        <div id="adminStartStep">
+          <div class="choice-group">
+            <label class="choice-card">
+              <input type="radio" name="adminStartChoice" value="work" />
+              <span>1 - Acesso à obra</span>
+            </label>
+            <label class="choice-card">
+              <input type="radio" name="adminStartChoice" value="cadastros" />
+              <span>2 - Cadastros</span>
+            </label>
+          </div>
+          <div class="actions-row">
+            <button type="button" id="proceedAdminStart">Prosseguir</button>
+          </div>
+        </div>
+
+        <div id="adminWorkChoiceStep" class="hidden">
+          <div class="choice-group">
+            <label class="choice-card">
+              <input type="radio" name="adminEntryChoice" value="create" />
+              <span>1 - Cadastro de nova obra</span>
+            </label>
+            <label class="choice-card">
+              <input type="radio" name="adminEntryChoice" value="select" />
+              <span>2 - Selecionar entre as obras cadastradas</span>
+            </label>
+          </div>
+          <div class="actions-row">
+            <button type="button" id="backToAdminStartFromWorkChoice" class="secondary">Voltar</button>
+            <button type="button" id="proceedAdminWorkChoice">Prosseguir</button>
+          </div>
+        </div>
+
+        <div id="adminSelectStep" class="hidden">
+          <label>Obras cadastradas
+            <select id="gatewayAdminWorkSelect"></select>
+          </label>
+          <div class="actions-row">
+            <button type="button" id="backToAdminChoiceFromSelect" class="secondary">Voltar</button>
+            <button type="button" id="proceedFromSelectWork">Prosseguir</button>
+          </div>
+        </div>
+
+        <div id="adminCreateStep" class="hidden">
+          <form id="gatewayCreateForm" class="form-grid">
+            <input id="gatewayWorkName" placeholder="Nome da nova obra" required />
+            <div class="inline-input">
+              <input id="gatewayWorkCep" placeholder="CEP (somente números)" inputmode="numeric" pattern="[0-9]{8}" required />
+              <button type="button" id="lookupCepBtn">Validar CEP</button>
+            </div>
+            <input id="gatewayWorkStreet" placeholder="Rua/Avenida" readonly required />
+            <input id="gatewayWorkNeighborhood" placeholder="Bairro" readonly required />
+            <input id="gatewayWorkCity" placeholder="Cidade" readonly required />
+            <input id="gatewayWorkState" placeholder="Estado" readonly required />
+            <input id="gatewayWorkNumber" placeholder="Número" required />
+            <input id="gatewayWorkComplement" placeholder="Complemento" required />
+            <input id="gatewayWorkPpcTargetPct" type="number" min="0" max="100" step="0.01" placeholder="Meta PPC (%)" value="80" required />
+            <input id="gatewayWorkStartDate" placeholder="Data de início (DD/MM/AAAA)" inputmode="numeric" pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}" required />
+          </form>
+          <div class="actions-row">
+            <button type="button" id="backToAdminChoiceFromCreate" class="secondary">Voltar</button>
+            <button type="button" id="proceedFromCreateWork">Prosseguir</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="nonAdminGateway" class="hidden">
+        <label>Obras com acesso para este usuário
+          <select id="gatewayUserWorkSelect"></select>
+        </label>
+        <div class="actions-row">
+          <button type="button" id="proceedFromUserWork">Prosseguir</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="appView" class="hidden">
+      <button type="button" id="sideNavToggleBtn" class="side-nav-toggle hidden" aria-label="Abrir menu">☰</button>
+      <div id="sideNavBackdrop" class="side-nav-backdrop hidden"></div>
+      <aside id="sideNav" class="side-nav">
+        <div class="side-nav-handle" aria-hidden="true">MENU</div>
+        <div class="side-nav-content">
+          <section class="side-nav-group" data-side-mode="cadastros">
+            <h3>Cadastros Gerais</h3>
+            <details class="side-nav-subgroup" open>
+              <summary>Cadastro de Usuário</summary>
+              <button type="button" class="side-nav-item" data-side-main="cadastros" data-side-cadastro="users" data-side-user-tab="users">Usuários</button>
+              <button type="button" class="side-nav-item" data-side-main="cadastros" data-side-cadastro="users" data-side-user-tab="profiles">Perfis de Permissionamento</button>
+            </details>
+            <button type="button" class="side-nav-item" data-side-main="cadastros" data-side-cadastro="works">Cadastro de Obra</button>
+            <button type="button" class="side-nav-item" data-side-main="cadastros" data-side-cadastro="contractors">Cadastro de Empreiteiro</button>
+            <button type="button" class="side-nav-item" data-side-main="cadastros" data-side-cadastro="causes">Cadastro de Causas de Não Cumprimento</button>
+            <button type="button" class="side-nav-item" data-side-main="cadastros" data-side-cadastro="groups">Cadastro de Grupo de Atividades</button>
+            <button type="button" class="side-nav-item" data-side-main="cadastros" data-side-cadastro="laborTypes">Cadastro de Tipos de Mão de Obra</button>
+            <button type="button" class="side-nav-item" data-side-main="cadastros" data-side-cadastro="company">Cadastro da Construtora</button>
+          </section>
+
+          <section class="side-nav-group" data-side-mode="obra">
+            <h3>Programação Semanal</h3>
+            <button type="button" class="side-nav-item" data-side-main="preprogramacao">Pré-Programação da Semana</button>
+            <button type="button" class="side-nav-item" data-side-main="reuniaoppc">Reunião de PPC</button>
+            <button type="button" class="side-nav-item" data-side-main="programacao">Programação da Semana</button>
+            <button type="button" class="side-nav-item" data-side-main="atividades">Atividades Previstas</button>
+          </section>
+
+          <section class="side-nav-group" data-side-mode="obra">
+            <h3>Feedback</h3>
+            <button type="button" class="side-nav-item" data-side-main="feedback">Feedback da Semana</button>
+            <button type="button" class="side-nav-item" data-side-main="qualidade">Qualidade Percebida</button>
+          </section>
+
+          <section class="side-nav-group" data-side-mode="obra" data-side-requires-dashboard>
+            <h3>Gestão e Dashboards</h3>
+            <button type="button" class="side-nav-item" data-side-main="gestao" data-side-dashboard="relatorio">Relatório da Semana</button>
+            <button type="button" class="side-nav-item" data-side-main="gestao" data-side-dashboard="historico">Histórico</button>
+          </section>
+
+          <section class="side-nav-group" data-side-mode="obra">
+            <h3>Cadastros da Obra</h3>
+            <button type="button" class="side-nav-item" data-side-main="cadastrosObra" data-side-obra="zoneamento">Zoneamento</button>
+            <button type="button" class="side-nav-item" data-side-main="cadastrosObra" data-side-obra="empreiteiros">Empreiteiros</button>
+            <button type="button" class="side-nav-item" data-side-main="cadastrosObra" data-side-obra="grupos">Grupos de Atividades da Obra</button>
+            <button type="button" class="side-nav-item" data-side-main="cadastrosObra" data-side-obra="feriados">Feriados</button>
+            <button type="button" class="side-nav-item" data-side-main="cadastrosObra" data-side-obra="prazos">Prazos</button>
+            <button type="button" class="side-nav-item" data-side-main="cadastrosObra" data-side-obra="qualidade">Qualidade Percebida</button>
+          </section>
+
+          <section class="side-nav-group">
+            <h3>Navegação</h3>
+            <button type="button" class="side-nav-item" data-side-action="back-start">Voltar ao Início</button>
+          </section>
+        </div>
+      </aside>
+
+      <section class="panel top-filters hidden" id="topFilters">
+        <label>Obra selecionada
+          <select id="workSelect"></select>
+        </label>
+        <label>Semana
+          <select id="weekSelect"></select>
+        </label>
+        <button id="refreshBtn" type="button">Atualizar</button>
+      </section>
+
+      <section class="tabs" id="mainTabs">
+        <button type="button" class="tab-btn active" data-tab="cadastros">Cadastros</button>
+        <button type="button" class="tab-btn" data-tab="preprogramacao">Pré-programação da semana</button>
+        <button type="button" class="tab-btn" data-tab="reuniaoppc">Reunião de PPC</button>
+        <button type="button" class="tab-btn" data-tab="programacao">Programação da semana</button>
+        <button type="button" class="tab-btn" data-tab="atividades">Atividades previstas</button>
+        <button type="button" class="tab-btn" data-tab="feedback">Feedback da semana</button>
+        <button type="button" class="tab-btn" data-tab="qualidade">Qualidade percebida</button>
+        <button type="button" class="tab-btn" data-tab="gestao">Gestão e dashboards</button>
+        <button type="button" class="tab-btn" data-tab="cadastrosObra">Cadastros da obra</button>
+      </section>
+
+      <section class="tab-panel active" data-tab-panel="cadastros">
+        <article class="panel hidden" id="cadastroMenuView">
+          <h2>Cadastros</h2>
+          <p>Use o menu lateral para acessar os cadastros gerais.</p>
+        </article>
+
+        <article class="panel hidden cadastro-view" id="cadastroUsersView">
+          <h2>Cadastro de Usuário</h2>
+          <section class="tabs user-cadastro-tabs hidden" id="userCadastroTabs">
+            <button type="button" class="tab-btn user-cadastro-tab-btn active" data-user-cadastro-tab="users">Usuários</button>
+            <button type="button" class="tab-btn user-cadastro-tab-btn" data-user-cadastro-tab="profiles">Perfis de permissionamento</button>
+          </section>
+
+          <section class="user-cadastro-panel active" data-user-cadastro-panel="users">
+            <div class="actions-row">
+              <button type="button" id="usersBackMenuBtn" class="secondary hidden">Voltar ao menu de cadastros</button>
+              <button type="button" id="openUserModalBtn">Cadastrar Usuário</button>
+            </div>
+
+            <form id="userForm" class="form-grid hidden">
+              <input id="userName" placeholder="Nome" required />
+              <input id="userCompany" placeholder="Empresa" required />
+              <input id="userEmail" type="email" placeholder="Email" required />
+              <input id="userPassword" type="password" placeholder="Senha (deixe em branco para manter)" />
+              <select id="userRole" required>
+                <option value="">Papel base inicial</option>
+                <option value="ADMIN">Administrador</option>
+                <option value="ENGINEERING">Engenharia</option>
+                <option value="CONTROLLER">Controller</option>
+                <option value="MANAGEMENT">Diretoria/Gerência</option>
+                <option value="CONTRACTOR">Empreiteiro</option>
+                <option value="VISUALIZER">Visualizador</option>
+                <option value="FOREMAN">Mestre/Contra-mestre</option>
+              </select>
+              <label class="choice-card"><input id="userPermanentPromotion" type="checkbox" checked /> Promoção permanente do papel base</label>
+              <input id="userPromotionDate" placeholder="Início do novo papel base (DD/MM/AAAA)" inputmode="numeric" pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}" />
+              <button type="submit" id="userSubmitBtn">Cadastrar usuário</button>
+              <button type="button" id="userCancelEditBtn" class="secondary hidden">Cancelar edição</button>
+            </form>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Empresa</th>
+                    <th>Email</th>
+                    <th>Perfil</th>
+                    <th>Obras associadas</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="usersBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="user-cadastro-panel hidden" data-user-cadastro-panel="profiles">
+            <div class="actions-row">
+              <button type="button" id="profilesBackMenuBtn" class="secondary hidden">Voltar ao menu de cadastros</button>
+            </div>
+            <h3>Perfis de Permissionamento</h3>
+            <p class="subtle">Crie perfis reutilizáveis com permissões detalhadas e vincule os perfis aos usuários da obra.</p>
+            <form id="permissionProfileForm" class="form-grid permission-profile-form">
+              <input id="permissionProfileName" placeholder="Nome do perfil" required />
+              <select id="permissionProfileBaseRole" required>
+                <option value="">Papel base do perfil</option>
+                <option value="ADMIN">Administrador</option>
+                <option value="ENGINEERING">Engenharia</option>
+                <option value="CONTROLLER">Controller</option>
+                <option value="MANAGEMENT">Diretoria/Gerência</option>
+                <option value="CONTRACTOR">Empreiteiro</option>
+                <option value="VISUALIZER">Visualizador</option>
+                <option value="FOREMAN">Mestre/Contra-mestre</option>
+              </select>
+              <input id="permissionProfileDescription" placeholder="Descrição curta do perfil" required />
+              <div id="permissionCatalogWrap" class="permission-catalog-wrap"></div>
+              <button type="submit" id="permissionProfileSubmitBtn">Cadastrar perfil</button>
+              <button type="button" id="permissionProfileCancelEditBtn" class="secondary hidden">Cancelar edição</button>
+            </form>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Perfil</th>
+                    <th>Papel base</th>
+                    <th>Descrição</th>
+                    <th>Permissões</th>
+                    <th>Origem</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="permissionProfilesBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <div id="userModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="userModalTitle">
+            <article class="planning-modal-card user-modal-card">
+              <h3 id="userModalTitle">Cadastrar Usuário</h3>
+              <form id="userModalForm" class="user-modal-form">
+                <div class="user-modal-row">
+                  <label for="userModalName">Nome</label>
+                  <input id="userModalName" type="text" required />
+                </div>
+                <div class="user-modal-row">
+                  <label for="userModalCompany">Empresa</label>
+                  <input id="userModalCompany" type="text" required />
+                </div>
+                <div class="user-modal-row">
+                  <label for="userModalEmail">Email</label>
+                  <input id="userModalEmail" type="email" required />
+                </div>
+                <div class="user-modal-row">
+                  <label for="userModalPassword">Senha</label>
+                  <input id="userModalPassword" type="password" />
+                </div>
+                <div class="user-modal-row">
+                  <label for="userModalRole">Perfil</label>
+                  <select id="userModalRole" required>
+                    <option value="">Selecione</option>
+                    <option value="ADMIN">Administrador</option>
+                    <option value="ENGINEERING">Engenharia</option>
+                    <option value="CONTROLLER">Controller</option>
+                    <option value="MANAGEMENT">Diretoria/Gerência</option>
+                    <option value="CONTRACTOR">Empreiteiro</option>
+                    <option value="VISUALIZER">Visualizador</option>
+                    <option value="FOREMAN">Mestre/Contra-mestre</option>
+                  </select>
+                </div>
+                <div class="user-modal-row user-modal-works">
+                  <label>Obras Vinculadas</label>
+                  <div id="userModalWorksList" class="user-modal-works-list"></div>
+                </div>
+                <p id="userModalError" class="hidden" style="color:#b33446; margin:0;">Não é permitido salvar, pois faltam informações</p>
+                <div class="actions-row">
+                  <button type="submit" id="userModalSaveBtn">Salvar</button>
+                  <button type="button" id="userModalCancelBtn" class="secondary">Cancelar</button>
+                </div>
+              </form>
+            </article>
+          </div>
+        </article>
+
+        <article class="panel hidden cadastro-view" id="cadastroWorksView">
+          <h2>Cadastro de Obra</h2>
+          <div class="actions-row">
+            <button type="button" id="openWorkModalBtn">Cadastrar Obra</button>
+          </div>
+          <div class="works-registered-banner">OBRAS CADASTRADAS</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Obra</th>
+                  <th>CEP</th>
+                  <th>Endereço</th>
+                  <th>Data início</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="worksBody"></tbody>
+            </table>
+          </div>
+          <div id="workModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="workModalTitle">
+            <article class="planning-modal-card work-modal-card">
+              <h3 id="workModalTitle">Cadastrar Obra</h3>
+              <form id="cadastroWorkForm" class="work-modal-form">
+                <div class="work-modal-row">
+                  <div class="work-modal-meta">
+                    <strong>Nome da Obra</strong>
+                    <small>Como a obra é nomeada.</small>
+                  </div>
+                  <div class="work-modal-input">
+                    <input id="cadastroWorkName" type="text" required />
+                  </div>
+                </div>
+
+                <div class="work-modal-row work-modal-row-cep">
+                  <div class="work-modal-meta">
+                    <strong>CEP</strong>
+                    <small>CEP da obra para validar endereço.</small>
+                  </div>
+                  <div class="work-modal-input">
+                    <input id="cadastroWorkCep" type="text" inputmode="numeric" pattern="[0-9]{8}" required />
+                  </div>
+                  <div class="work-modal-action">
+                    <button type="button" id="cadastroLookupCepBtn" class="secondary">Validar CEP</button>
+                  </div>
+                </div>
+
+                <div class="work-modal-row">
+                  <div class="work-modal-meta">
+                    <strong>Rua/Avenida</strong>
+                    <small>Logradouro retornado pela validação do CEP.</small>
+                  </div>
+                  <div class="work-modal-input">
+                    <input id="cadastroWorkStreet" type="text" readonly required />
+                  </div>
+                </div>
+
+                <div class="work-modal-row">
+                  <div class="work-modal-meta">
+                    <strong>Bairro</strong>
+                    <small>Bairro retornado pela validação do CEP.</small>
+                  </div>
+                  <div class="work-modal-input">
+                    <input id="cadastroWorkNeighborhood" type="text" readonly required />
+                  </div>
+                </div>
+
+                <div class="work-modal-row">
+                  <div class="work-modal-meta">
+                    <strong>Cidade</strong>
+                    <small>Cidade retornada pela validação do CEP.</small>
+                  </div>
+                  <div class="work-modal-input">
+                    <input id="cadastroWorkCity" type="text" readonly required />
+                  </div>
+                </div>
+
+                <div class="work-modal-row">
+                  <div class="work-modal-meta">
+                    <strong>Estado</strong>
+                    <small>UF retornada pela validação do CEP.</small>
+                  </div>
+                  <div class="work-modal-input">
+                    <input id="cadastroWorkState" type="text" readonly required />
+                  </div>
+                </div>
+
+                <div class="work-modal-row">
+                  <div class="work-modal-meta">
+                    <strong>Número</strong>
+                    <small>Número do imóvel da obra.</small>
+                  </div>
+                  <div class="work-modal-input">
+                    <input id="cadastroWorkNumber" type="text" required />
+                  </div>
+                </div>
+
+                <div class="work-modal-row">
+                  <div class="work-modal-meta">
+                    <strong>Complemento</strong>
+                    <small>Complemento do endereço.</small>
+                  </div>
+                  <div class="work-modal-input">
+                    <input id="cadastroWorkComplement" type="text" required />
+                  </div>
+                </div>
+
+                <div class="work-modal-row">
+                  <div class="work-modal-meta">
+                    <strong>Meta PPC (%)</strong>
+                    <small>Meta percentual de cumprimento do PPC.</small>
+                  </div>
+                  <div class="work-modal-input">
+                    <input id="cadastroWorkPpcTargetPct" type="number" min="0" max="100" step="0.01" value="80" required />
+                  </div>
+                </div>
+
+                <div class="work-modal-row">
+                  <div class="work-modal-meta">
+                    <strong>Data de Início</strong>
+                    <small>Data inicial da obra no formato DD/MM/AAAA.</small>
+                  </div>
+                  <div class="work-modal-input">
+                    <input id="cadastroWorkStartDate" type="text" inputmode="numeric" pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}" required />
+                  </div>
+                </div>
+
+                <div class="actions-row">
+                  <button type="submit" id="cadastroWorkSubmitBtn">Salvar Obra</button>
+                  <button type="button" id="cadastroWorkCancelBtn" class="secondary">Cancelar</button>
+                </div>
+              </form>
+            </article>
+          </div>
+          <div id="workValidationModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="workValidationTitle">
+            <article class="planning-modal-card">
+              <h3 id="workValidationTitle">Cadastro de Obra</h3>
+              <p>Não é possível cadastrar nova obra. Faltam dados!</p>
+              <div class="actions-row">
+                <button type="button" id="workValidationOkBtn" class="secondary">OK</button>
+              </div>
+            </article>
+          </div>
+          <div class="actions-row">
+            <button type="button" id="backCadastroWorksBtn" class="secondary">Voltar</button>
+          </div>
+        </article>
+
+        <article class="panel hidden cadastro-view" id="cadastroContractorsView">
+          <h2>Cadastro de Empreiteiros</h2>
+          <div class="actions-row">
+            <button type="button" id="openContractorModalBtn">Cadastrar Empreiteiro</button>
+          </div>
+          <div class="works-registered-banner">EMPREITEIROS CADASTRADOS</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Empresa</th>
+                  <th>Encarregado</th>
+                  <th>Email</th>
+                  <th>Telefone</th>
+                  <th>Tipo de mão de obra</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="contractorsBody"></tbody>
+            </table>
+          </div>
+          <div id="contractorModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="contractorModalTitle">
+            <article class="planning-modal-card work-modal-card">
+              <h3 id="contractorModalTitle">Cadastrar Empreiteiro</h3>
+              <form id="contractorForm" class="work-modal-form">
+                <div class="work-modal-row">
+                  <div class="work-modal-meta">
+                    <strong>Nome da Empresa</strong>
+                    <small>Razão social ou nome da empreiteira.</small>
+                  </div>
+                  <div class="work-modal-input">
+                    <input id="contractorName" type="text" required />
+                  </div>
+                </div>
+
+                <div class="work-modal-row">
+                  <div class="work-modal-meta">
+                    <strong>Nome do Encarregado</strong>
+                    <small>Responsável da empreiteira na obra.</small>
+                  </div>
+                  <div class="work-modal-input">
+                    <input id="contractorSupervisor" type="text" required />
+                  </div>
+                </div>
+
+                <div class="work-modal-row">
+                  <div class="work-modal-meta">
+                    <strong>Email para comunicação</strong>
+                    <small>Email principal de contato.</small>
+                  </div>
+                  <div class="work-modal-input">
+                    <input id="contractorEmail" type="email" required />
+                  </div>
+                </div>
+
+                <div class="work-modal-row">
+                  <div class="work-modal-meta">
+                    <strong>Telefone com DDD</strong>
+                    <small>Somente números: 2 dígitos de DDD + 8 ou 9 dígitos.</small>
+                  </div>
+                  <div class="work-modal-input">
+                    <input id="contractorPhone" type="text" inputmode="numeric" pattern="[0-9]{10,11}" maxlength="11" required />
+                  </div>
+                </div>
+
+                <div class="work-modal-row">
+                  <div class="work-modal-meta">
+                    <strong>Tipo de mão de obra</strong>
+                    <small>Selecione o tipo cadastrado.</small>
+                  </div>
+                  <div class="work-modal-input">
+                    <select id="contractorFunction" required>
+                      <option value="">Tipo de mão de obra</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="actions-row">
+                  <button type="submit" id="contractorSubmitBtn">Salvar Empreiteiro</button>
+                  <button type="button" id="contractorCancelBtn" class="secondary">Cancelar</button>
+                </div>
+              </form>
+            </article>
+          </div>
+          <div id="contractorValidationModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="contractorValidationTitle">
+            <article class="planning-modal-card">
+              <h3 id="contractorValidationTitle">Cadastro de Empreiteiros</h3>
+              <p id="contractorValidationMessage">Não é possível cadastrar novo empreiteiro. Faltam dados!</p>
+              <div class="actions-row">
+                <button type="button" id="contractorValidationOkBtn" class="secondary">OK</button>
+              </div>
+            </article>
+          </div>
+          <div class="actions-row">
+            <button type="button" id="backCadastroContractorsBtn" class="secondary">Voltar</button>
+          </div>
+        </article>
+
+        <article class="panel hidden cadastro-view" id="cadastroCausesView">
+          <h2>Cadastro de Causas de Não Cumprimento</h2>
+          <form id="causeForm" class="form-grid">
+            <select id="causeLevel" required>
+              <option value="1">Nível 1 - Totalizadora</option>
+              <option value="2">Nível 2 - Causa</option>
+            </select>
+            <select id="causeParentCategory" class="hidden">
+              <option value="">Selecione a totalizadora</option>
+            </select>
+            <input id="causeDetail" placeholder="Descrição" required />
+            <label class="checkbox-inline cause-specific-checkbox">
+              <input id="causeContractorSpecific" type="checkbox" />
+              Causa Específica do Empreiteiro
+            </label>
+            <button type="submit" id="causeSubmitBtn">Cadastrar causa</button>
+            <button type="button" id="causeCancelEditBtn" class="secondary hidden">Cancelar edição</button>
+          </form>
+          <div class="works-registered-banner">CAUSAS DE NÃO CUMPRIMENTO CADASTRADAS</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nível</th>
+                  <th>Descrição</th>
+                  <th class="th-two-lines cause-specific-col"><span>Específico do</span><span>Empreiteiro</span></th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="causesBody"></tbody>
+            </table>
+          </div>
+          <div class="actions-row">
+            <button type="button" id="backCadastroCausesBtn" class="secondary">Voltar</button>
+          </div>
+        </article>
+
+        <article class="panel hidden cadastro-view" id="cadastroGroupsView">
+          <h2>Cadastro de Grupo de Atividades</h2>
+          <section class="cadastro-section-card">
+            <h3>Cadastro de Grupo</h3>
+            <form id="taskGroupForm" class="form-grid">
+              <input id="taskGroupName" placeholder="Nome do grupo (ex.: Supraestrutura)" required />
+              <button type="submit" id="taskGroupSubmitBtn">Cadastrar grupo</button>
+              <button type="button" id="taskGroupCancelEditBtn" class="secondary hidden">Cancelar edição</button>
+            </form>
+          </section>
+
+          <section class="cadastro-section-card">
+            <h3>Cadastro de Atividades do Grupo</h3>
+            <form id="taskGroupItemForm" class="form-grid">
+              <select id="taskGroupSelect" required>
+                <option value="">Selecione o grupo</option>
+              </select>
+              <input id="taskGroupItemDesc" placeholder="Tarefa do grupo" required />
+              <select id="taskGroupItemLaborType" required>
+                <option value="">Tipo de mão de obra</option>
+              </select>
+              <button type="submit" id="taskGroupItemSubmitBtn">Adicionar tarefa no grupo</button>
+              <button type="button" id="taskGroupItemCancelEditBtn" class="secondary hidden">Cancelar edição</button>
+            </form>
+          </section>
+
+          <div class="works-registered-banner">GRUPOS DE ATIVIDADES CADASTRADOS</div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nível</th>
+                  <th>Descrição</th>
+                  <th>Mão de obra</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="taskGroupItemsBody"></tbody>
+            </table>
+          </div>
+
+          <div class="actions-row">
+            <button type="button" id="backCadastroGroupsBtn" class="secondary">Voltar</button>
+          </div>
+        </article>
+
+        <article class="panel hidden cadastro-view" id="cadastroLaborTypesView">
+          <h2>Cadastro de Tipos de Mão de Obra</h2>
+          <section class="cadastro-section-card">
+            <h3>Cadastro de Tipo de Mão de Obra</h3>
+            <form id="contractorFunctionForm" class="form-grid">
+              <input id="contractorFunctionName" placeholder="Tipo de mão de obra (ex.: MO ESTRUTURA)" required />
+              <button type="submit" id="contractorFunctionSubmitBtn">Cadastrar tipo</button>
+              <button type="button" id="contractorFunctionCancelEditBtn" class="secondary hidden">Cancelar edição</button>
+            </form>
+          </section>
+
+          <div class="works-registered-banner">TIPOS DE MÃO DE OBRA CADASTRADAS</div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tipo de mão de obra</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="laborTypesBody"></tbody>
+            </table>
+          </div>
+
+          <div class="actions-row">
+            <button type="button" id="backCadastroLaborTypesBtn" class="secondary">Voltar</button>
+          </div>
+        </article>
+
+        <article class="panel hidden cadastro-view" id="cadastroCompanyView">
+          <h2>Cadastro da Construtora</h2>
+          <form id="companyForm" class="work-modal-form company-form">
+            <div class="work-modal-row">
+              <div class="work-modal-meta">
+                <strong>Nome da Construtora</strong>
+                <small>Nome oficial exibido em relatórios e documentos.</small>
+              </div>
+              <div class="work-modal-input">
+                <input id="companyName" placeholder="Nome da construtora" required />
+              </div>
+            </div>
+
+            <div class="work-modal-row">
+              <div class="work-modal-meta">
+                <strong>CNPJ</strong>
+                <small>Documento fiscal da construtora.</small>
+              </div>
+              <div class="work-modal-input">
+                <input id="companyCnpj" placeholder="CNPJ" required />
+              </div>
+            </div>
+
+            <div class="work-modal-row work-modal-row-cep">
+              <div class="work-modal-meta">
+                <strong>CEP</strong>
+                <small>Informe o CEP e valide para preencher endereço base.</small>
+              </div>
+              <div class="work-modal-input">
+                <input id="companyCep" placeholder="CEP (somente números)" inputmode="numeric" pattern="[0-9]{8}" required />
+              </div>
+              <div class="work-modal-action">
+                <button type="button" id="companyLookupCepBtn">Validar CEP</button>
+              </div>
+            </div>
+
+            <div class="work-modal-row">
+              <div class="work-modal-meta">
+                <strong>Rua/Avenida</strong>
+                <small>Preenchido automaticamente pela validação do CEP.</small>
+              </div>
+              <div class="work-modal-input">
+                <input id="companyStreet" placeholder="Rua/Avenida" readonly required />
+              </div>
+            </div>
+
+            <div class="work-modal-row">
+              <div class="work-modal-meta">
+                <strong>Bairro</strong>
+                <small>Preenchido automaticamente pela validação do CEP.</small>
+              </div>
+              <div class="work-modal-input">
+                <input id="companyNeighborhood" placeholder="Bairro" readonly required />
+              </div>
+            </div>
+
+            <div class="work-modal-row">
+              <div class="work-modal-meta">
+                <strong>Cidade</strong>
+                <small>Preenchido automaticamente pela validação do CEP.</small>
+              </div>
+              <div class="work-modal-input">
+                <input id="companyCity" placeholder="Cidade" readonly required />
+              </div>
+            </div>
+
+            <div class="work-modal-row">
+              <div class="work-modal-meta">
+                <strong>Estado</strong>
+                <small>Preenchido automaticamente pela validação do CEP.</small>
+              </div>
+              <div class="work-modal-input">
+                <input id="companyState" placeholder="Estado" readonly required />
+              </div>
+            </div>
+
+            <div class="work-modal-row">
+              <div class="work-modal-meta">
+                <strong>Número</strong>
+                <small>Número do endereço da construtora.</small>
+              </div>
+              <div class="work-modal-input">
+                <input id="companyNumber" placeholder="Número" required />
+              </div>
+            </div>
+
+            <div class="work-modal-row">
+              <div class="work-modal-meta">
+                <strong>Complemento</strong>
+                <small>Opcional (sala, conjunto, bloco etc.).</small>
+              </div>
+              <div class="work-modal-input">
+                <input id="companyComplement" placeholder="Complemento (opcional)" />
+              </div>
+            </div>
+
+            <div class="work-modal-row">
+              <div class="work-modal-meta">
+                <strong>Site da Construtora</strong>
+                <small>Endereço web oficial da empresa.</small>
+              </div>
+              <div class="work-modal-input">
+                <input id="companySite" placeholder="Site da construtora" required />
+              </div>
+            </div>
+
+            <div class="work-modal-row">
+              <div class="work-modal-meta">
+                <strong>Logo da Construtora</strong>
+                <small>Faça upload em JPG, PNG, BMP ou outro formato de imagem.</small>
+              </div>
+              <div class="work-modal-input">
+                <input id="companyLogo" type="file" accept="image/*" />
+              </div>
+            </div>
+
+            <div class="work-modal-row">
+              <div class="work-modal-meta">
+                <strong>Miniatura do Logo</strong>
+                <small>Confirma visualmente se o upload foi carregado corretamente.</small>
+              </div>
+              <div class="work-modal-input company-logo-preview-wrap">
+                <img id="companyLogoPreview" class="company-logo-preview hidden" alt="Miniatura do logo da construtora" />
+                <small id="companyLogoInfo">Logo atual: não informado.</small>
+              </div>
+            </div>
+
+            <div class="work-modal-row company-form-actions-row">
+              <div></div>
+              <div class="work-modal-input company-form-actions">
+                <button type="submit">Salvar cadastro</button>
+              </div>
+            </div>
+          </form>
+
+          <div id="companySavedModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="companySavedTitle">
+            <article class="planning-modal-card">
+              <h3 id="companySavedTitle">Cadastro da Construtora</h3>
+              <p id="companySavedMessage">Cadastro Salvo</p>
+              <div class="actions-row">
+                <button id="closeCompanySavedModalBtn" type="button" class="secondary">Fechar</button>
+              </div>
+            </article>
+          </div>
+
+          <div class="actions-row">
+            <button type="button" id="backCadastroCompanyBtn" class="secondary">Voltar</button>
+          </div>
+        </article>
+      </section>
+
+      <section class="tab-panel" data-tab-panel="programacao">
+        <article class="panel">
+          <h2 id="planningControlTitle">Abertura e controle da semana</h2>
+          <form id="weekForm" class="form-grid week-grid">
+            <input id="weekNumber" type="number" min="1" placeholder="Número da semana" required />
+            <input id="weekStartPreview" placeholder="Início automático (DD/MM/AAAA)" readonly />
+            <input id="weekEndPreview" placeholder="Fim automático (DD/MM/AAAA)" readonly />
+            <button id="weekRefreshBtn" type="button">Atualizar</button>
+          </form>
+          <div id="planningDeadlineCountdown" class="deadline-countdown-box hidden"></div>
+          <p id="weekStatusInfo" class="week-status">Status da semana: -</p>
+          <small id="weekPeriodInfo" class="hidden">A semana é calculada automaticamente a partir da data de início da obra (segunda a sábado).</small>
+          <div class="actions-row" id="weekActionRow">
+            <button id="openWeekBtn" type="button">Abrir semana</button>
+            <button id="closePlanningBtn" type="button" class="warn">Fechar planejamento</button>
+            <button id="reopenBtn" type="button" class="secondary">Solicitar abertura</button>
+          </div>
+        </article>
+
+        <article class="panel">
+          <h2 id="planningWeatherTitle">Previsão do tempo</h2>
+          <div id="weatherStrip" class="weather-strip"></div>
+        </article>
+
+        <article class="panel hidden">
+          <h2>Nova linha da planilha</h2>
+          <form id="taskForm" class="task-form">
+            <input id="taskDesc" placeholder="Tarefa" required />
+            <select id="taskContractor">
+              <option value="">Empreiteiro</option>
+            </select>
+            <input id="taskSupervisor" placeholder="Encarregado" />
+            <select id="taskLocation1">
+              <option value="">Local Nível 1</option>
+            </select>
+            <select id="taskLocation2">
+              <option value="">Local Nível 2</option>
+            </select>
+            <input id="taskStart" placeholder="Início (DD/MM/AAAA)" inputmode="numeric" pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}" />
+            <input id="taskEnd" placeholder="Fim (DD/MM/AAAA)" inputmode="numeric" pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}" />
+            <fieldset class="days-box">
+              <legend>Dias previstos</legend>
+              <label><input type="checkbox" value="MONDAY" data-day /> Seg</label>
+              <label><input type="checkbox" value="TUESDAY" data-day /> Ter</label>
+              <label><input type="checkbox" value="WEDNESDAY" data-day /> Qua</label>
+              <label><input type="checkbox" value="THURSDAY" data-day /> Qui</label>
+              <label><input type="checkbox" value="FRIDAY" data-day /> Sex</label>
+              <label id="saturdayDayOption"><input type="checkbox" value="SATURDAY" data-day /> Sáb</label>
+            </fieldset>
+            <button type="submit">Adicionar linha</button>
+          </form>
+        </article>
+
+        <article class="panel">
+          <h2 id="planningSheetTitle">Planilha da semana</h2>
+          <div class="actions-row">
+            <button id="addRow1Btn" type="button">+ 1 linha</button>
+            <button id="addRow3Btn" type="button">+ 3 linhas</button>
+            <button id="addRow5Btn" type="button">+ 5 linhas</button>
+            <input id="addRowCustomQty" type="number" min="1" step="1" placeholder="Qtd. livre" />
+            <button id="addRowCustomBtn" type="button" class="secondary">Adicionar</button>
+          </div>
+          <div class="actions-row">
+            <select id="importGroupSource">
+              <option value="obra">Grupo da obra</option>
+              <option value="geral">Grupo geral</option>
+            </select>
+            <select id="importGroupSelect">
+              <option value="">Selecione o grupo</option>
+            </select>
+            <button id="importGroupBtn" type="button">Importar grupo de atividades</button>
+            <button id="saveWeekSheetBtn" type="button">Salvar planilha da semana</button>
+          </div>
+          <div class="actions-row">
+            <button id="exportWeekExcelBtn" type="button">Exportar tarefas (Excel)</button>
+            <button id="importWeekExcelBtn" type="button">Importar tarefas (Excel)</button>
+            <button id="exportWeekTxtBtn" type="button" class="secondary">Exportar tarefas (TXT/CSV)</button>
+            <button id="importWeekTxtBtn" type="button" class="secondary">Importar tarefas (TXT/CSV)</button>
+            <input id="importWeekExcelInput" type="file" accept=".xlsx,.xls" class="hidden" />
+            <input id="importWeekTxtInput" type="file" accept=".txt,.csv,.tsv,.text/plain" class="hidden" />
+          </div>
+          <div class="subtle">
+            Sugestão: exporte a planilha base da semana e edite sobre ela (já inclui pendentes e reservas).<br>
+            Padrão TXT/CSV: colunas separadas por <strong>;</strong> e cabeçalhos iguais ao Excel exportado.
+          </div>
+          <div id="planningValidationModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="planningValidationTitle">
+            <article class="planning-modal-card">
+              <h3 id="planningValidationTitle">Validação da Programação Semanal</h3>
+              <p id="planningValidationMessage"></p>
+              <ul id="planningValidationList"></ul>
+              <div class="actions-row">
+                <button id="closePlanningValidationBtn" type="button" class="secondary">OK</button>
+              </div>
+            </article>
+          </div>
+          <div class="table-wrap">
+            <table class="plan-table">
+              <thead>
+                
+                <tr>
+                  <th>#</th>
+                  <th class="th-two-lines"><span>Sem.</span><span>Origem</span></th>
+                  <th>Empreiteiro</th>
+                  <th>Local 1</th>
+                  <th>Local 2</th>
+                  <th>Tarefa</th>
+                  <th class="th-two-lines"><span>Início</span><span>Prev.</span></th>
+                  <th class="th-two-lines"><span>Fim</span><span>Prev.</span></th>
+                  <th>Seg</th>
+                  <th>Ter</th>
+                  <th>Qua</th>
+                  <th>Qui</th>
+                  <th>Sex</th>
+                  <th>Sáb</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+                <tr class="excel-filter-row">
+                  <th></th>
+                  <th></th>
+                  <th><input id="planningFilterContractor" type="text" placeholder="Filtrar" /></th>
+                  <th><input id="planningFilterLocation1" type="text" placeholder="Filtrar" /></th>
+                  <th><input id="planningFilterLocation2" type="text" placeholder="Filtrar" /></th>
+                  <th><input id="planningFilterTask" type="text" placeholder="Filtrar" /></th>
+                  <th colspan="2" class="planning-clear-cell">
+                    <button id="planningFilterClearBtn" type="button" class="secondary compact">Limpar</button>
+                  </th>
+                  <th>
+                    <select id="planningFilterMon">
+                      <option value="">Todos</option>
+                      <option value="checked">✓</option>
+                      <option value="unchecked">-</option>
+                    </select>
+                  </th>
+                  <th>
+                    <select id="planningFilterTue">
+                      <option value="">Todos</option>
+                      <option value="checked">✓</option>
+                      <option value="unchecked">-</option>
+                    </select>
+                  </th>
+                  <th>
+                    <select id="planningFilterWed">
+                      <option value="">Todos</option>
+                      <option value="checked">✓</option>
+                      <option value="unchecked">-</option>
+                    </select>
+                  </th>
+                  <th>
+                    <select id="planningFilterThu">
+                      <option value="">Todos</option>
+                      <option value="checked">✓</option>
+                      <option value="unchecked">-</option>
+                    </select>
+                  </th>
+                  <th>
+                    <select id="planningFilterFri">
+                      <option value="">Todos</option>
+                      <option value="checked">✓</option>
+                      <option value="unchecked">-</option>
+                    </select>
+                  </th>
+                  <th>
+                    <select id="planningFilterSat">
+                      <option value="">Todos</option>
+                      <option value="checked">✓</option>
+                      <option value="unchecked">-</option>
+                    </select>
+                  </th>
+                  <th>
+                    <select id="planningFilterStatus">
+                      <option value="">Todos</option>
+                      <option value="PLANNED">Planejada</option>
+                      <option value="PENDENTE">Pendente</option>
+                      <option value="RESERVA">Reserva</option>
+                      <option value="RETRABALHO">Retrabalho</option>
+                    </select>
+                  </th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tasksBody"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="tab-panel" data-tab-panel="atividades">
+        <article class="panel">
+          <h2>Atividades previstas</h2>
+          <div class="expected-controls">
+            <div class="expected-row">
+              <span class="expected-label">Semana</span>
+              <input id="expectedWeekNumber" type="number" min="1" placeholder="Número da semana" />
+              <button id="expectedWeekRefreshBtn" type="button">Atualizar</button>
+            </div>
+            <div class="expected-row">
+              <span class="expected-label">Data de Início</span>
+              <input id="expectedWeekStart" placeholder="DD/MM/AAAA" readonly />
+              <span class="expected-label">Data de Fim</span>
+              <input id="expectedWeekEnd" placeholder="DD/MM/AAAA" readonly />
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Empreiteiro</th>
+                  <th>Encarregado</th>
+                  <th>Tipo de mão de obra</th>
+                  <th>Local 1</th>
+                  <th>Local 2</th>
+                  <th>Tarefa</th>
+                  <th>Início previsto</th>
+                  <th>Fim previsto</th>
+                  <th>Seg</th>
+                  <th>Ter</th>
+                  <th>Qua</th>
+                  <th>Qui</th>
+                  <th>Sex</th>
+                  <th>Sáb</th>
+                  <th>Status</th>
+                </tr>
+                <tr class="excel-filter-row">
+                  <th></th>
+                  <th><input id="expectedFilterContractor" type="text" placeholder="Filtrar" /></th>
+                  <th><input id="expectedFilterSupervisor" type="text" placeholder="Filtrar" /></th>
+                  <th><input id="expectedFilterLabor" type="text" placeholder="Filtrar" /></th>
+                  <th><input id="expectedFilterLocation1" type="text" placeholder="Filtrar" /></th>
+                  <th><input id="expectedFilterLocation2" type="text" placeholder="Filtrar" /></th>
+                  <th><input id="expectedFilterTask" type="text" placeholder="Filtrar" /></th>
+                  <th></th>
+                  <th></th>
+                  <th></th>
+                  <th></th>
+                  <th></th>
+                  <th></th>
+                  <th></th>
+                  <th><button id="expectedFilterClearBtn" type="button" class="secondary compact">Limpar</button></th>
+                  <th>
+                    <select id="expectedFilterStatus">
+                      <option value="">Todos</option>
+                      <option value="PLANNED">Planejada</option>
+                      <option value="PENDENTE">Pendente</option>
+                      <option value="RESERVA">Reserva</option>
+                      <option value="RETRABALHO">Retrabalho</option>
+                    </select>
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="expectedTasksBody"></tbody>
+            </table>
+          </div>
+          <div id="expectedExportPanel" class="expected-export-panel hidden">
+            <section class="cadastro-section-card expected-export-card">
+              <h3>Exportações e PDFs</h3>
+              <div class="actions-row">
+                <button id="expectedExportExcelBtn" type="button">Exportar Excel (lista corrida)</button>
+              </div>
+              <div id="expectedPdfButtons" class="expected-pdf-buttons"></div>
+            </section>
+
+            <section class="cadastro-section-card expected-email-card">
+              <h3>Envio de atividades por e-mail</h3>
+              <p id="expectedEmailInfo" class="subtle">Selecione os empreiteiros para envio do PDF de atividades previstas da semana.</p>
+              <div class="actions-row">
+                <button id="expectedSendEmailBtn" type="button" class="secondary">Enviar atividades por e-mail</button>
+              </div>
+            </section>
+          </div>
+          <div id="expectedEmailModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="expectedEmailTitle">
+            <article class="planning-modal-card">
+              <h3 id="expectedEmailTitle">Selecionar empreiteiros para envio</h3>
+              <p>Selecione os empreiteiros que receberão por e-mail os PDFs de atividades previstas da semana.</p>
+              <div id="expectedEmailContractorList" class="user-modal-works-list"></div>
+              <div class="actions-row">
+                <button type="button" id="expectedEmailSendSelectedBtn">Enviar selecionados</button>
+                <button type="button" id="expectedEmailCancelBtn" class="secondary">Cancelar</button>
+              </div>
+            </article>
+          </div>
+        </article>
+      </section>
+
+      <section class="tab-panel" data-tab-panel="reuniaoppc">
+        <article class="panel">
+          <h2>Reunião de PPC</h2>
+          <div class="expected-controls">
+            <div class="expected-row">
+              <span class="expected-label">Semana</span>
+              <input id="ppcMeetingWeekNumber" type="number" min="1" placeholder="Número da semana" />
+              <button id="ppcMeetingWeekRefreshBtn" type="button">Atualizar</button>
+            </div>
+            <div class="expected-row">
+              <span class="expected-label">Data de Início</span>
+              <input id="ppcMeetingWeekStart" placeholder="DD/MM/AAAA" readonly />
+              <span class="expected-label">Data de Fim</span>
+              <input id="ppcMeetingWeekEnd" placeholder="DD/MM/AAAA" readonly />
+            </div>
+          </div>
+          <div id="ppcMeetingDeadlineCountdown" class="deadline-countdown-box hidden"></div>
+        </article>
+
+        <article class="panel">
+          <h2>1) Pré-reunião</h2>
+          <div class="work-modal-row">
+            <div class="work-modal-meta">
+              <strong>Data da Reunião de PPC</strong>
+              <small>Auto-preenchido com a semana anterior + 7 dias. Você pode ajustar manualmente.</small>
+            </div>
+            <div class="work-modal-input">
+              <input id="ppcMeetingDate" type="text" inputmode="numeric" maxlength="10" placeholder="DD/MM/AAAA" />
+            </div>
+          </div>
+          <div class="work-modal-row">
+            <div class="work-modal-meta">
+              <strong>Hora da Reunião de PPC</strong>
+              <small>Formato 24 horas (HH:MM).</small>
+            </div>
+            <div class="work-modal-input">
+              <input id="ppcMeetingTime" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" />
+            </div>
+          </div>
+          <div class="actions-row">
+            <button id="ppcMeetingSavePreBtn" type="button">Salvar data/hora da reunião</button>
+            <button id="ppcMeetingPreExportAllPdfBtn" type="button">Gerar PDF geral da pré-programação</button>
+            <button id="ppcMeetingPreExportMinutesPdfBtn" type="button">Gerar PDF ata + presença (pré-reunião)</button>
+            <button id="ppcMeetingPreSendAllEmailBtn" type="button" class="secondary">Enviar e-mail (atividades + convocação)</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Empreiteiro</th>
+                  <th>Tipo de mão de obra</th>
+                  <th>E-mail</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="ppcMeetingPreContractorsBody"></tbody>
+            </table>
+          </div>
+          <div id="ppcPreEmailModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="ppcPreEmailTitle">
+            <article class="planning-modal-card">
+              <h3 id="ppcPreEmailTitle">Selecionar empreiteiros para envio</h3>
+              <p>Selecione os empreiteiros que receberão por e-mail os PDFs de atividades + convocação.</p>
+              <div id="ppcPreEmailContractorList" class="user-modal-works-list"></div>
+              <div class="actions-row">
+                <button type="button" id="ppcPreEmailSendSelectedBtn">Enviar selecionados</button>
+                <button type="button" id="ppcPreEmailCancelBtn" class="secondary">Cancelar</button>
+              </div>
+            </article>
+          </div>
+        </article>
+
+        <article class="panel">
+          <h2>2) Pós-reunião</h2>
+          <p id="ppcMeetingClosedInfo" class="subtle"></p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Empreiteiro</th>
+                  <th>Tipo de mão de obra</th>
+                  <th>Presente</th>
+                </tr>
+              </thead>
+              <tbody id="ppcMeetingAttendanceBody"></tbody>
+            </table>
+          </div>
+          <label>
+            Principais pontos discutidos na reunião (Ata)
+            <textarea id="ppcMeetingMinutes" rows="6" placeholder="Descreva os principais pontos discutidos na reunião de PPC."></textarea>
+          </label>
+          <div class="actions-row">
+            <button id="ppcMeetingSavePostBtn" type="button">Salvar presença e ata</button>
+            <button id="ppcMeetingCloseBtn" type="button" class="warn">Fechar lista de presença e ata</button>
+            <button id="ppcMeetingExportMinutesPdfBtn" type="button">Gerar PDF ata + presença</button>
+            <button id="ppcMeetingSendMinutesEmailBtn" type="button" class="secondary">Enviar e-mail da ata para participantes</button>
+          </div>
+          <div id="ppcPostEmailModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="ppcPostEmailTitle">
+            <article class="planning-modal-card">
+              <h3 id="ppcPostEmailTitle">Selecionar empreiteiros para envio</h3>
+              <p>Selecione os empreiteiros que receberão por e-mail a ata + lista de presença.</p>
+              <div id="ppcPostEmailContractorList" class="user-modal-works-list"></div>
+              <div class="actions-row">
+                <button type="button" id="ppcPostEmailSendSelectedBtn">Enviar selecionados</button>
+                <button type="button" id="ppcPostEmailCancelBtn" class="secondary">Cancelar</button>
+              </div>
+            </article>
+          </div>
+          <div id="ppcMeetingValidationModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="ppcMeetingValidationTitle">
+            <article class="planning-modal-card">
+              <h3 id="ppcMeetingValidationTitle">Fechamento bloqueado</h3>
+              <p id="ppcMeetingValidationMessage"></p>
+              <div class="actions-row">
+                <button type="button" id="closePpcMeetingValidationBtn" class="secondary">OK</button>
+              </div>
+            </article>
+          </div>
+        </article>
+      </section>
+
+      <section class="tab-panel" data-tab-panel="cadastrosObra">
+        <article class="panel">
+          <h2>Cadastros da obra</h2>
+          <section class="tabs" id="obraCadastroTabs">
+            <button type="button" class="tab-btn obra-cadastro-tab-btn active" data-obra-cadastro-tab="zoneamento">Zoneamento</button>
+            <button type="button" class="tab-btn obra-cadastro-tab-btn" data-obra-cadastro-tab="empreiteiros">Empreiteiros</button>
+            <button type="button" class="tab-btn obra-cadastro-tab-btn" data-obra-cadastro-tab="grupos">Grupos de atividades da obra</button>
+            <button type="button" class="tab-btn obra-cadastro-tab-btn" data-obra-cadastro-tab="feriados">Feriados</button>
+            <button type="button" class="tab-btn obra-cadastro-tab-btn" data-obra-cadastro-tab="prazos">Prazos</button>
+            <button type="button" class="tab-btn obra-cadastro-tab-btn" data-obra-cadastro-tab="qualidade">Qualidade Percebida</button>
+          </section>
+        </article>
+
+        <article class="panel obra-cadastro-panel active" data-obra-cadastro-panel="zoneamento">
+          <h2>Zoneamento</h2>
+          <section class="cadastro-section-card">
+            <h3>Cadastro de Nível 1</h3>
+            <form id="zoneLevel1Form" class="form-grid">
+              <input id="zoneLevel1Name" placeholder="Novo item Nível 1 (ex.: Pavimento 12)" required />
+              <button type="submit" id="zoneLevel1SubmitBtn">Cadastrar Nível 1</button>
+              <button type="button" id="zoneLevel1CancelEditBtn" class="secondary hidden">Cancelar edição</button>
+            </form>
+          </section>
+          <section class="cadastro-section-card">
+            <h3>Nível 2 via edição do Nível 1</h3>
+            <p class="subtle">Use o ícone de lápis do Nível 1 para renomear e incluir itens de Nível 2 em lote.</p>
+            <form id="zoneLevel2Form" class="form-grid hidden">
+              <select id="zoneLevel2Parent">
+                <option value="">Selecione o Nível 1</option>
+              </select>
+              <input id="zoneLevel2Name" placeholder="Novo item Nível 2 (ex.: Apartamento 1204)" />
+              <button type="submit" id="zoneLevel2SubmitBtn">Cadastrar Nível 2</button>
+              <button type="button" id="zoneLevel2CancelEditBtn" class="secondary hidden">Cancelar edição</button>
+            </form>
+          </section>
+          <div class="works-registered-banner">ZONAS CADASTRADAS</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Nível</th>
+                  <th>Descrição</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="zoneamentoBody"></tbody>
+            </table>
+          </div>
+          <div id="zoneLevel1EditModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="zoneLevel1EditTitle">
+            <article class="planning-modal-card zone-level1-edit-card">
+              <h3 id="zoneLevel1EditTitle">Editar Nível 1 e itens de Nível 2</h3>
+              <div class="zone-level1-edit-grid">
+                <label for="zoneLevel1EditName">Nome do Nível 1</label>
+                <input id="zoneLevel1EditName" placeholder="Nome do Nível 1" />
+              </div>
+              <div class="zone-level1-edit-grid">
+                <label for="zoneLevel1EditLevel2Bulk">Nível 2 em lote (uma linha por item)</label>
+                <textarea id="zoneLevel1EditLevel2Bulk" rows="5" placeholder="Exemplo:\nApto 101\nApto 102\nApto 103"></textarea>
+              </div>
+              <div class="zone-level1-edit-lines">
+                <div class="actions-row">
+                  <strong>Adicionar manualmente</strong>
+                  <button type="button" id="zoneLevel1EditAddLineBtn" class="secondary compact">Adicionar linha</button>
+                </div>
+                <div id="zoneLevel1EditLevel2Lines" class="zone-level2-lines-list"></div>
+              </div>
+              <div class="actions-row">
+                <button type="button" id="zoneLevel1EditSaveBtn">Salvar edição</button>
+                <button type="button" id="zoneLevel1EditCancelBtn" class="secondary">Cancelar</button>
+              </div>
+            </article>
+          </div>
+        </article>
+
+        <article class="panel obra-cadastro-panel hidden" data-obra-cadastro-panel="empreiteiros">
+          <h2>Empreiteiros da obra</h2>
+          <section class="cadastro-section-card">
+            <h3>Cadastro de Empreiteiro na Obra</h3>
+            <form id="obraContractorImportForm" class="form-grid">
+              <select id="obraContractorFunctionFilter" required>
+                <option value="">Filtrar por tipo de mão de obra</option>
+              </select>
+              <select id="obraContractorCatalogSelect" required>
+                <option value="">Selecione empreiteiro do cadastro geral</option>
+              </select>
+              <button type="submit" id="obraContractorImportBtn">Adicionar empreiteiro na obra</button>
+            </form>
+          </section>
+          <div class="works-registered-banner">EMPREITEIROS CADASTRADOS NA OBRA</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Empresa</th>
+                  <th>Encarregado</th>
+                  <th>Email</th>
+                  <th>Telefone</th>
+                  <th>Tipo de mão de obra</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="obraContractorsBody"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel obra-cadastro-panel hidden" data-obra-cadastro-panel="grupos">
+          <h2>Grupos de atividades da obra</h2>
+          <section class="cadastro-section-card">
+            <h3>Carregar grupo geral para a obra</h3>
+            <form id="obraTaskGroupImportForm" class="form-grid">
+              <select id="obraTaskGroupTemplateSelect" required>
+                <option value="">Selecione grupo do cadastro geral</option>
+              </select>
+              <button type="submit" id="obraTaskGroupImportBtn">Carregar grupo geral para obra</button>
+            </form>
+          </section>
+          <section class="cadastro-section-card">
+            <h3>Cadastrar grupo novo</h3>
+            <form id="obraTaskGroupForm" class="form-grid">
+              <input id="obraTaskGroupName" placeholder="Nome do grupo (ex.: Supraestrutura)" required />
+              <button type="submit" id="obraTaskGroupSubmitBtn">Cadastrar grupo</button>
+              <button type="button" id="obraTaskGroupCancelEditBtn" class="secondary hidden">Cancelar edição</button>
+            </form>
+          </section>
+          <section class="cadastro-section-card">
+            <h3>Cadastrar nova tarefa</h3>
+            <form id="obraTaskGroupItemForm" class="form-grid">
+              <select id="obraTaskGroupSelect" required>
+                <option value="">Selecione o grupo</option>
+              </select>
+              <input id="obraTaskGroupItemDesc" placeholder="Tarefa do grupo" required />
+              <select id="obraTaskGroupItemLaborType" required>
+                <option value="">Tipo de mão de obra</option>
+              </select>
+              <button type="submit" id="obraTaskGroupItemSubmitBtn">Adicionar tarefa no grupo</button>
+              <button type="button" id="obraTaskGroupItemCancelEditBtn" class="secondary hidden">Cancelar edição</button>
+            </form>
+          </section>
+          <div class="works-registered-banner">GRUPOS E TAREFAS CADASTRADAS</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nível</th>
+                  <th>Descrição</th>
+                  <th>Mão de obra</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="obraTaskGroupItemsBody"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel obra-cadastro-panel hidden" data-obra-cadastro-panel="feriados">
+          <h2>Feriados da obra</h2>
+          <section class="cadastro-section-card">
+            <h3>Cadastro de Feriados</h3>
+            <form id="obraHolidayForm" class="form-grid">
+              <input id="obraHolidayDate" placeholder="Data do feriado (DD/MM/AAAA)" inputmode="numeric" pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}" maxlength="10" required />
+              <input id="obraHolidayDescription" placeholder="Descrição do feriado" required />
+              <button type="submit" id="obraHolidaySubmitBtn">Cadastrar feriado</button>
+              <button type="button" id="obraHolidayCancelEditBtn" class="secondary hidden">Cancelar edição</button>
+            </form>
+          </section>
+          <div class="works-registered-banner">FERIADOS CADASTRADOS</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Descrição</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="obraHolidaysBody"></tbody>
+            </table>
+          </div>
+          <div class="actions-row">
+            <button type="button" id="obraHolidayCalendarPdfBtn">Gerar PDF calendário de feriados</button>
+          </div>
+        </article>
+
+        <article class="panel obra-cadastro-panel hidden" data-obra-cadastro-panel="prazos">
+          <h2>Prazos da obra</h2>
+          <section class="cadastro-section-card prazos-card">
+            <h3>Prazos e datas</h3>
+            <p id="obraDeadlineRuleHint" class="subtle prazo-hint">Defina dia e hora limite para fechamento do planejamento e do feedback da obra.</p>
+            <form id="obraDeadlineRuleForm" class="deadlines-form">
+              <div class="deadline-rule-row">
+                <label for="prePlanningDeadlineWeekday">Limite para o fechamento da pré-programação da semana (da semana que virá)</label>
+                <select id="prePlanningDeadlineWeekday">
+                  <option value="">Selecione o dia</option>
+                  <option value="MONDAY">Segunda-feira</option>
+                  <option value="TUESDAY">Terça-feira</option>
+                  <option value="WEDNESDAY">Quarta-feira</option>
+                  <option value="THURSDAY">Quinta-feira</option>
+                  <option value="FRIDAY">Sexta-feira</option>
+                  <option value="SATURDAY">Sábado</option>
+                </select>
+                <input id="prePlanningDeadlineTime" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" aria-label="Horário limite da pré-programação" />
+              </div>
+
+              <div class="deadline-rule-row">
+                <label for="ppcMeetingDeadlineWeekday">Limite para o fechamento da lista de presença e ata de reunião (da semana que virá)</label>
+                <select id="ppcMeetingDeadlineWeekday">
+                  <option value="">Selecione o dia</option>
+                  <option value="MONDAY">Segunda-feira</option>
+                  <option value="TUESDAY">Terça-feira</option>
+                  <option value="WEDNESDAY">Quarta-feira</option>
+                  <option value="THURSDAY">Quinta-feira</option>
+                  <option value="FRIDAY">Sexta-feira</option>
+                  <option value="SATURDAY">Sábado</option>
+                </select>
+                <input id="ppcMeetingDeadlineTime" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" aria-label="Horário limite da lista de presença e ata" />
+              </div>
+
+              <div class="deadline-rule-row">
+                <label for="planningDeadlineWeekday">Limite para o fechamento da programação da semana (da semana que virá)</label>
+                <select id="planningDeadlineWeekday">
+                  <option value="">Selecione o dia</option>
+                  <option value="MONDAY">Segunda-feira</option>
+                  <option value="TUESDAY">Terça-feira</option>
+                  <option value="WEDNESDAY">Quarta-feira</option>
+                  <option value="THURSDAY">Quinta-feira</option>
+                  <option value="FRIDAY">Sexta-feira</option>
+                  <option value="SATURDAY">Sábado</option>
+                </select>
+                <input id="planningDeadlineTime" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" aria-label="Horário limite da programação" />
+              </div>
+
+              <div class="deadline-rule-row">
+                <label for="feedbackDeadlineWeekday">Limite para o fechamento do feedback (da semana que passou)</label>
+                <select id="feedbackDeadlineWeekday">
+                  <option value="">Selecione o dia</option>
+                  <option value="MONDAY">Segunda-feira</option>
+                  <option value="TUESDAY">Terça-feira</option>
+                  <option value="WEDNESDAY">Quarta-feira</option>
+                  <option value="THURSDAY">Quinta-feira</option>
+                  <option value="FRIDAY">Sexta-feira</option>
+                  <option value="SATURDAY">Sábado</option>
+                </select>
+                <input id="feedbackDeadlineTime" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" aria-label="Horário limite do feedback" />
+              </div>
+
+              <div class="deadline-rule-row">
+                <label for="qualityDeadlineWeekday">Limite para o fechamento da qualidade percebida (da semana atual)</label>
+                <select id="qualityDeadlineWeekday">
+                  <option value="">Selecione o dia</option>
+                  <option value="MONDAY">Segunda-feira</option>
+                  <option value="TUESDAY">Terça-feira</option>
+                  <option value="WEDNESDAY">Quarta-feira</option>
+                  <option value="THURSDAY">Quinta-feira</option>
+                  <option value="FRIDAY">Sexta-feira</option>
+                  <option value="SATURDAY">Sábado</option>
+                </select>
+                <input id="qualityDeadlineTime" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" aria-label="Horário limite da qualidade percebida" />
+              </div>
+
+              <div class="actions-row">
+                <button type="submit" id="obraDeadlineRuleSaveBtn">Salvar prazos</button>
+              </div>
+            </form>
+          </section>
+
+          <div id="obraDeadlineSavedModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="obraDeadlineSavedTitle">
+            <article class="planning-modal-card">
+              <h3 id="obraDeadlineSavedTitle">Prazos da obra</h3>
+              <p>Prazos salvos</p>
+              <div class="actions-row">
+                <button id="obraDeadlineSavedOkBtn" type="button" class="secondary">OK</button>
+              </div>
+            </article>
+          </div>
+        </article>
+
+        <article class="panel obra-cadastro-panel hidden" data-obra-cadastro-panel="qualidade">
+          <h2>Qualidade percebida</h2>
+          <form id="obraPerceivedQualityForm" class="quality-perceived-form">
+            <section class="cadastro-section-card">
+              <h3>1) Prazo</h3>
+              <p class="subtle">Defina os percentuais mínimos de cumprimento de atividades do PPC para enquadramento na faixa.</p>
+              <div class="form-grid quality-grid">
+                <label for="qpDeadlineRegularPct">Regular (% mínimo)</label>
+                <input id="qpDeadlineRegularPct" type="number" min="0" max="100" step="0.01" placeholder="Ex.: 70" />
+                <label for="qpDeadlineGoodPct">Bom (% mínimo)</label>
+                <input id="qpDeadlineGoodPct" type="number" min="0" max="100" step="0.01" placeholder="Ex.: 85" />
+              </div>
+            </section>
+
+            <section class="cadastro-section-card">
+              <h3>2) Qualidade</h3>
+              <p class="subtle">Defina as notas mínimas (0 a 10, números inteiros) para enquadramento em Regular e Bom.</p>
+              <div class="form-grid quality-grid">
+                <label for="qpQualityRegularScore">Regular (nota mínima)</label>
+                <input id="qpQualityRegularScore" type="number" min="0" max="10" step="1" placeholder="0 a 10" />
+                <label for="qpQualityGoodScore">Bom (nota mínima)</label>
+                <input id="qpQualityGoodScore" type="number" min="0" max="10" step="1" placeholder="0 a 10" />
+              </div>
+            </section>
+
+            <section class="cadastro-section-card">
+              <h3>3) Colaboração</h3>
+              <p class="subtle">A colaboração é composta por duas notas: presença do encarregado do empreiteiro na reunião de PPC e avaliação da equipe da obra.</p>
+              <div class="form-grid quality-grid">
+                <label for="qpCollabPresenceImpactScore">Impacto da presença do encarregado (0 a 10)</label>
+                <input id="qpCollabPresenceImpactScore" type="number" min="0" max="10" step="1" placeholder="0 a 10" />
+                <label for="qpCollabRegularScore">Regular (nota mínima da avaliação da equipe)</label>
+                <input id="qpCollabRegularScore" type="number" min="0" max="10" step="1" placeholder="0 a 10" />
+                <label for="qpCollabGoodScore">Bom (nota mínima da avaliação da equipe)</label>
+                <input id="qpCollabGoodScore" type="number" min="0" max="10" step="1" placeholder="0 a 10" />
+              </div>
+            </section>
+
+            <section class="cadastro-section-card">
+              <h3>4) Segurança</h3>
+              <p class="subtle">Defina as notas mínimas (0 a 10, números inteiros) para enquadramento em Regular e Bom.</p>
+              <div class="form-grid quality-grid">
+                <label for="qpSafetyRegularScore">Regular (nota mínima)</label>
+                <input id="qpSafetyRegularScore" type="number" min="0" max="10" step="1" placeholder="0 a 10" />
+                <label for="qpSafetyGoodScore">Bom (nota mínima)</label>
+                <input id="qpSafetyGoodScore" type="number" min="0" max="10" step="1" placeholder="0 a 10" />
+              </div>
+            </section>
+
+            <section class="cadastro-section-card">
+              <h3>5) Limpeza</h3>
+              <p class="subtle">Defina as notas mínimas (0 a 10, números inteiros) para enquadramento em Regular e Bom.</p>
+              <div class="form-grid quality-grid">
+                <label for="qpCleaningRegularScore">Regular (nota mínima)</label>
+                <input id="qpCleaningRegularScore" type="number" min="0" max="10" step="1" placeholder="0 a 10" />
+                <label for="qpCleaningGoodScore">Bom (nota mínima)</label>
+                <input id="qpCleaningGoodScore" type="number" min="0" max="10" step="1" placeholder="0 a 10" />
+              </div>
+            </section>
+
+            <div class="actions-row">
+              <button type="submit" id="obraPerceivedQualitySaveBtn">Salvar parâmetros</button>
+            </div>
+          </form>
+          <p id="obraPerceivedQualityHint" class="subtle">Somente Administrador, Engenharia e Controller podem editar estes parâmetros.</p>
+        </article>
+      </section>
+
+      <section class="tab-panel" data-tab-panel="feedback">
+        <article class="panel">
+          <h2>Feedback da semana</h2>
+          <div class="expected-controls">
+            <div class="expected-row">
+              <span class="expected-label">Semana</span>
+              <input id="feedbackWeekNumber" type="number" min="1" placeholder="Número da semana" />
+              <button id="feedbackWeekRefreshBtn" type="button">Atualizar</button>
+            </div>
+            <div class="expected-row feedback-top-row">
+              <span class="expected-label">Data de Início</span>
+              <input id="feedbackWeekStart" placeholder="DD/MM/AAAA" readonly />
+              <span class="expected-label">Data de Fim</span>
+              <input id="feedbackWeekEnd" placeholder="DD/MM/AAAA" readonly />
+              <button id="saveFeedbackInlineBtn" type="submit" form="feedbackForm">Salvar feedback da semana</button>
+              <button id="feedbackComparisonPdfBtn" type="button" class="secondary">Gerar PDF comparativo da semana</button>
+            </div>
+          </div>
+          <div class="actions-row">
+            <button id="feedbackBulkExecutedBtn" type="button" class="secondary">Marcar todas como Executada</button>
+            <button id="feedbackBulkStartedBtn" type="button" class="secondary">Marcar todas como Iniciada</button>
+            <button id="feedbackBulkNotStartedBtn" type="button" class="secondary">Marcar todas como Não iniciada</button>
+          </div>
+          <div id="feedbackDeadlineCountdown" class="deadline-countdown-box hidden"></div>
+          <form id="feedbackForm" class="feedback-form feedback-form-inline">
+            <input id="closeFeedbackCycle" type="checkbox" class="hidden" />
+          </form>
+          <button id="closeFeedbackWeekBtn" type="button" class="danger feedback-close-btn">Fechar feedback da semana</button>
+          <div id="feedbackCloseConfirmModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="feedbackCloseConfirmTitle">
+            <article class="planning-modal-card feedback-close-modal-card">
+              <h3 id="feedbackCloseConfirmTitle">Fechar feedback da semana</h3>
+              <p>Você tem certeza que deja fechar o feedback da semana? Esta ação é irreversível</p>
+              <div class="actions-row">
+                <button type="button" id="feedbackCloseConfirmYesBtn" class="danger">Sim</button>
+                <button type="button" id="feedbackCloseConfirmNoBtn" class="secondary">Não</button>
+              </div>
+            </article>
+          </div>
+        </article>
+
+        <article class="panel">
+          <h2>Itens para feedback</h2>
+          <div class="table-wrap">
+            <table class="feedback-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Empreiteiro</th>
+                  <th>Local 1</th>
+                  <th>Local 2</th>
+                  <th>Tarefa</th>
+                  <th class="th-two-lines"><span>Status do</span><span>Feedback</span></th>
+                  <th class="th-two-lines"><span>Grupo da</span><span>Causa</span></th>
+                  <th>Causa</th>
+                  <th>Comentário</th>
+                  <th id="feedbackHeadMon" class="feedback-day-head">Seg</th>
+                  <th id="feedbackHeadTue" class="feedback-day-head">Ter</th>
+                  <th id="feedbackHeadWed" class="feedback-day-head">Qua</th>
+                  <th id="feedbackHeadThu" class="feedback-day-head">Qui</th>
+                  <th id="feedbackHeadFri" class="feedback-day-head">Sex</th>
+                  <th id="feedbackHeadSat" class="feedback-day-head">Sáb</th>
+                  <th>Ações</th>
+                </tr>
+                <tr class="excel-filter-row">
+                  <th></th>
+                  <th><input id="feedbackFilterContractor" type="text" placeholder="Filtrar" /></th>
+                  <th><input id="feedbackFilterLocation1" type="text" placeholder="Filtrar" /></th>
+                  <th><input id="feedbackFilterLocation2" type="text" placeholder="Filtrar" /></th>
+                  <th><input id="feedbackFilterTask" type="text" placeholder="Filtrar" /></th>
+                  <th>
+                    <select id="feedbackFilterStatus">
+                      <option value="">Todos</option>
+                      <option value="EXECUTED">Executada</option>
+                      <option value="STARTED">Iniciada</option>
+                      <option value="NOT_STARTED">Não iniciada</option>
+                      <option value="CANCELLED">Cancelada</option>
+                      <option value="EXECUTED_UNPLANNED">Exec./N.Planejada</option>
+                    </select>
+                  </th>
+                  <th><input id="feedbackFilterCauseGroup" type="text" placeholder="Filtrar" /></th>
+                  <th><input id="feedbackFilterCause" type="text" placeholder="Filtrar" /></th>
+                  <th><input id="feedbackFilterComment" type="text" placeholder="Filtrar" /></th>
+                  <th></th>
+                  <th></th>
+                  <th></th>
+                  <th></th>
+                  <th></th>
+                  <th><button id="feedbackFilterClearBtn" type="button" class="secondary compact">Limpar</button></th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="feedbackTasksBody"></tbody>
+            </table>
+          </div>
+          <div class="feedback-legend">
+            <span class="feedback-legend-chip feedback-legend-reserve"></span>
+            <span>Fundo cinza = atividades Reserva</span>
+          </div>
+          <div id="feedbackValidationModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="feedbackValidationTitle">
+            <article class="planning-modal-card">
+              <h3 id="feedbackValidationTitle">Validação do Feedback da Semana</h3>
+              <p id="feedbackValidationMessage">Não foi possível salvar o feedback.</p>
+              <ul id="feedbackValidationList" class="hidden"></ul>
+              <div class="actions-row">
+                <button type="button" id="closeFeedbackValidationBtn" class="secondary">Fechar</button>
+              </div>
+            </article>
+          </div>
+          <h3>Adicionar atividade executada não planejada</h3>
+          <form id="feedbackNewTaskForm" class="form-grid">
+            <select id="feedbackNewLocation1">
+              <option value="">Local 1</option>
+            </select>
+            <select id="feedbackNewLocation2">
+              <option value="">Local 2 (opcional)</option>
+            </select>
+            <select id="feedbackNewContractor">
+              <option value="">Empreiteiro</option>
+            </select>
+            <input id="feedbackNewSupervisor" placeholder="Encarregado" readonly />
+            <input id="feedbackNewTask" placeholder="Nova atividade não planejada (tarefa)" />
+            <input id="feedbackNewActualStart" placeholder="Data real início (DD/MM/AAAA)" inputmode="numeric" />
+            <input id="feedbackNewActualEnd" placeholder="Data real fim (DD/MM/AAAA)" inputmode="numeric" />
+            <fieldset class="days-box">
+              <legend>Dias executados (ou use datas)</legend>
+              <label><input type="checkbox" value="MONDAY" data-feedback-new-day /> Seg</label>
+              <label><input type="checkbox" value="TUESDAY" data-feedback-new-day /> Ter</label>
+              <label><input type="checkbox" value="WEDNESDAY" data-feedback-new-day /> Qua</label>
+              <label><input type="checkbox" value="THURSDAY" data-feedback-new-day /> Qui</label>
+              <label><input type="checkbox" value="FRIDAY" data-feedback-new-day /> Sex</label>
+              <label><input type="checkbox" value="SATURDAY" data-feedback-new-day /> Sáb</label>
+            </fieldset>
+            <button type="submit" id="feedbackAddUnplannedBtn">Adicionar atividade executada não planejada</button>
+          </form>
+        </article>
+      </section>
+
+      <section class="tab-panel" data-tab-panel="gestao">
+        <article class="panel">
+          <div class="actions-row dashboard-subtabs">
+            <button type="button" class="tab-btn dashboard-subtab-btn active" data-dashboard-tab="relatorio">Relatório da semana</button>
+            <button type="button" class="tab-btn dashboard-subtab-btn" data-dashboard-tab="historico">Histórico</button>
+          </div>
+        </article>
+
+        <div class="dashboard-subtab-panel active" data-dashboard-panel="relatorio">
+          <article class="panel">
+            <h2>Relatório da semana</h2>
+            <div class="actions-row">
+              <label>
+                Semana
+                <input id="dashboardWeekNumber" type="number" min="1" placeholder="Número da semana" />
+              </label>
+              <button id="dashboardWeekRefreshBtn" type="button">Atualizar</button>
+              <label>
+                Data de início
+                <input id="dashboardWeekStart" type="text" placeholder="DD/MM/AAAA" readonly />
+              </label>
+              <label>
+                Data de fim
+                <input id="dashboardWeekEnd" type="text" placeholder="DD/MM/AAAA" readonly />
+              </label>
+            </div>
+          </article>
+
+          <article class="panel">
+            <h3>Relatório semanal em PDF</h3>
+            <div class="actions-row">
+              <button id="dashboardLastWeekReportPdfBtn" type="button">Gerar Relatório Semanal em PDF</button>
+            </div>
+          </article>
+
+          <article class="panel">
+            <h3>PPC</h3>
+            <div class="kpis dashboard-kpis-compact" id="dashboardPpcKpiRow"></div>
+          </article>
+
+          <article class="panel">
+            <h3>Desempenho por empreiteiro</h3>
+            <div id="dashboardContractorMetaLabel" class="chart-bar-label"></div>
+            <div id="dashboardContractorBars" class="chart-bars"></div>
+          </article>
+
+          <article class="panel">
+            <h3>PPC por tipo de mão de obra</h3>
+            <div id="dashboardLaborTypeMetaLabel" class="chart-bar-label"></div>
+            <div id="dashboardLaborTypeBars" class="chart-bars"></div>
+          </article>
+
+          <article class="panel">
+            <h3>Principais causas de não cumprimento das atividades</h3>
+            <ul id="causesList"></ul>
+          </article>
+
+          <article class="panel">
+            <h3>Ranking de empreiteiros</h3>
+            <div class="table-wrap">
+              <table class="dashboard-table-centered">
+                <thead>
+                  <tr>
+                    <th>Ranking</th>
+                    <th>Empreiteiro</th>
+                    <th>Ativ. planejadas</th>
+                    <th>Causa não cumprimento<br>específica</th>
+                    <th>% não cumprimento<br>específica</th>
+                    <th>Performance</th>
+                  </tr>
+                </thead>
+                <tbody id="dashboardRankingBody"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel">
+            <h3>Qualidade percebida</h3>
+            <div class="table-wrap">
+              <table class="dashboard-table-centered">
+                <thead>
+                  <tr>
+                    <th>Empreiteiro</th>
+                    <th>PPC</th>
+                    <th>Colaboração</th>
+                    <th>Limpeza</th>
+                    <th>Qualidade</th>
+                    <th>Segurança</th>
+                  </tr>
+                </thead>
+                <tbody id="dashboardPerceivedQualityBody"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel">
+            <h3>Acessos por usuário na semana</h3>
+            <div class="table-wrap">
+              <table class="dashboard-table-centered">
+                <thead>
+                  <tr>
+                    <th>Usuário</th>
+                    <th>Email</th>
+                    <th>Acessos</th>
+                  </tr>
+                </thead>
+                <tbody id="dashboardAccessBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+
+        <div class="dashboard-subtab-panel hidden" data-dashboard-panel="historico">
+          <article class="panel">
+            <h2>Histórico da obra (acumulado)</h2>
+            <div class="actions-row">
+              <button id="dashboardHistoryPdfBtn" type="button">Gerar PDF histórico da obra</button>
+            </div>
+            <div id="historyCoverageNotice" class="history-notice hidden"></div>
+            <div class="kpis" id="historyKpiRow"></div>
+          </article>
+
+          <article class="panel split">
+            <div>
+              <h3>Governança do processo</h3>
+              <div class="kpis dashboard-kpis-compact" id="historyGovernanceKpis"></div>
+            </div>
+            <div>
+              <h3>Desempenho semanal</h3>
+              <div id="historyTrendBars" class="chart-bars"></div>
+            </div>
+          </article>
+
+          <article class="panel split">
+            <div>
+              <h3>Desempenho mensal</h3>
+              <div id="historyMonthlyPerformanceBars" class="chart-bars"></div>
+            </div>
+            <div>
+              <h3>Evolução mensal (planejadas, canceladas, não executadas, N/P executadas)</h3>
+              <div id="historyMonthlyEvolutionBars" class="chart-bars"></div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <h3>Qualidade do planejamento</h3>
+            <div id="historyPlanningQualityBars" class="chart-bars"></div>
+          </article>
+
+          <article class="panel split">
+            <div>
+              <h3>Desempenho por empreiteiro</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Empreiteiro</th>
+                      <th>Planejadas</th>
+                      <th>Executadas</th>
+                      <th>Canceladas</th>
+                      <th>N/P executadas</th>
+                      <th>% Exec./Plan.</th>
+                    </tr>
+                  </thead>
+                  <tbody id="historyContractorBody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <h3>Mapa de calor por Zona 1</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Rank</th>
+                      <th>Zona 1</th>
+                      <th>Exec./Plan.</th>
+                      <th>Total</th>
+                      <th>%</th>
+                    </tr>
+                  </thead>
+                  <tbody id="historyZoneHeatBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel split">
+            <div>
+              <h3>Média mensal global</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Mês</th>
+                      <th>Semanas</th>
+                      <th>Média % executadas</th>
+                      <th>Média PPC</th>
+                    </tr>
+                  </thead>
+                  <tbody id="historyMonthlyGlobalBody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <h3>Causas mais frequentes (histórico)</h3>
+              <ul id="historyCausesList"></ul>
+            </div>
+          </article>
+
+          <article class="panel">
+            <h3>Média mensal por empreiteiro</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Mês</th>
+                    <th>Empreiteiro</th>
+                    <th>Semanas</th>
+                    <th>Média % executadas</th>
+                    <th>Planejadas</th>
+                    <th>Executadas</th>
+                    <th>Canceladas</th>
+                  </tr>
+                </thead>
+                <tbody id="historyMonthlyContractorBody"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel">
+            <h3>PPC por tipo de mão de obra</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Tipo de mão de obra</th>
+                    <th>Planejadas</th>
+                    <th>Executadas</th>
+                    <th>% Exec./Plan.</th>
+                  </tr>
+                </thead>
+                <tbody id="historyLaborTypeBody"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel">
+            <h3>Confiabilidade do planejamento por empreiteiro</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Empreiteiro</th>
+                    <th>Semanas ativas</th>
+                    <th>Semanas ≥ meta</th>
+                    <th>Confiabilidade</th>
+                    <th>Média % Exec./Plan.</th>
+                  </tr>
+                </thead>
+                <tbody id="historyReliabilityBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+
+      </section>
+
+      <section class="tab-panel" data-tab-panel="qualidade">
+        <article class="panel">
+          <h2>Qualidade percebida</h2>
+          <div class="expected-controls">
+            <div class="expected-row">
+              <span class="expected-label">Semana</span>
+              <input id="qualityWeekNumber" type="number" min="1" placeholder="Número da semana" />
+              <button id="qualityWeekRefreshBtn" type="button">Atualizar</button>
+            </div>
+            <div class="expected-row feedback-top-row quality-top-row">
+              <span class="expected-label">Data de Início</span>
+              <input id="qualityWeekStart" placeholder="DD/MM/AAAA" readonly />
+              <span class="expected-label">Data de Fim</span>
+              <input id="qualityWeekEnd" placeholder="DD/MM/AAAA" readonly />
+              <button id="saveQualityBtn" type="button">Salvar qualidade percebida</button>
+              <button id="qualityWeekPdfBtn" type="button" class="secondary hidden">Gerar PDF da qualidade percebida</button>
+            </div>
+          </div>
+          <div id="qualityDeadlineCountdown" class="deadline-countdown-box hidden"></div>
+          <button id="closeQualityWeekBtn" type="button" class="danger feedback-close-btn">Fechar qualidade percebida da semana</button>
+        </article>
+        <article class="panel">
+          <h2>Itens de Qualidade Percebida</h2>
+          <div class="table-wrap">
+            <table class="quality-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Empreiteiro</th>
+                  <th>Qualidade (0-10)</th>
+                  <th>Colaboração equipe (0-10)</th>
+                  <th>Segurança (0-10)</th>
+                  <th>Limpeza (0-10)</th>
+                  <th>Comentários</th>
+                </tr>
+              </thead>
+              <tbody id="qualityBody"></tbody>
+            </table>
+          </div>
+          <div id="qualityValidationModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="qualityValidationTitle">
+            <article class="planning-modal-card">
+              <h3 id="qualityValidationTitle">Validação da Qualidade Percebida</h3>
+              <p id="qualityValidationMessage">Não foi possível fechar a Qualidade Percebida da semana.</p>
+              <ul id="qualityValidationList" class="hidden"></ul>
+              <div class="actions-row">
+                <button type="button" id="closeQualityValidationBtn" class="secondary">OK</button>
+              </div>
+            </article>
+          </div>
+        </article>
+      </section>
+    </section>
+  </main>
+
+  <aside id="weatherMiniThumb" class="weather-mini-thumb hidden" aria-live="polite"></aside>
+  <footer id="statusBar">Pronto.</footer>
+  <script src="./app.js"></script>
+</body>
+</html>
