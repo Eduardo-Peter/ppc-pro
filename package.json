@@ -19,6 +19,7 @@
     "db:seed:pg": "node backend/prisma/seed.js",
     "db:bootstrap:prod": "node backend/prisma/bootstrap-prod.js",
     "db:clone:to:pg": "node scripts/clone-sqlite-to-postgres.js",
+    "db:fix:pg:seq": "node scripts/reset-postgres-sequences.js",
     "db:seed:history": "node backend/prisma/seed-dashboard-history.js",
     "desktop": "echo \"Desktop app sera reconectado apos estabilizar backend\"",
     "build": "echo \"Add build steps here\""

@@ -13,6 +13,10 @@ function quoteIdent(value) {
   return `"${String(value).replace(/"/g, '""')}"`;
 }
 
+function quoteLiteral(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
 function pgPlaceholders(rowCount, colCount, startIndex = 1) {
   const rows = [];
   let p = startIndex;
@@ -72,6 +76,31 @@ async function copyTable(source, target, tableName, batchSize = 200) {
   return inserted;
 }
 
+async function resetTargetIdentitySequences(target, tableNames) {
+  for (const tableName of tableNames) {
+    // eslint-disable-next-line no-await-in-loop
+    const seqRows = await target.$queryRawUnsafe(
+      `SELECT pg_get_serial_sequence(format('public.%I', ${quoteLiteral(tableName)}), 'id') AS seq`,
+    );
+    const sequenceName = String(seqRows?.[0]?.seq || '').trim();
+    if (!sequenceName) continue;
+
+    // eslint-disable-next-line no-await-in-loop
+    const maxRows = await target.$queryRawUnsafe(
+      `SELECT COALESCE(MAX("id"), 0) AS max_id FROM ${quoteIdent(tableName)}`,
+    );
+    const maxId = Number(maxRows?.[0]?.max_id || 0);
+
+    if (maxId > 0) {
+      // eslint-disable-next-line no-await-in-loop
+      await target.$executeRawUnsafe(`SELECT setval(${quoteLiteral(sequenceName)}, ${maxId}, true)`);
+    } else {
+      // eslint-disable-next-line no-await-in-loop
+      await target.$executeRawUnsafe(`SELECT setval(${quoteLiteral(sequenceName)}, 1, false)`);
+    }
+  }
+}
+
 async function main() {
   const targetUrl = String(process.env.TARGET_DATABASE_URL || process.env.DATABASE_URL || '').trim();
   if (!targetUrl) {
@@ -86,12 +115,12 @@ async function main() {
   const preferredOrder = [
     'PermissionProfile',
     'ProfilePermission',
-    'User',
+    'ContractorFunction',
     'Work',
+    'Contractor',
+    'User',
     'UserWorkRole',
     'UserProfileAssignment',
-    'ContractorFunction',
-    'Contractor',
     'Location',
     'TaskGroup',
     'TaskGroupItem',
@@ -99,8 +128,11 @@ async function main() {
     'Holiday',
     'NotificationRule',
     'WorkPerceivedQualityConfig',
+    'WorkFeasibility',
     'Week',
     'WeekWeatherDay',
+    'WeekPpcMeeting',
+    'PpcMeetingAttendance',
     'Task',
     'PreTask',
     'TaskPlannedDay',
@@ -109,8 +141,8 @@ async function main() {
     'ReopenRequest',
     'FutureWeekAuthorization',
     'ContractorPerceivedQualityWeek',
-    'WeekPpcMeeting',
-    'PpcMeetingAttendance',
+    'WeekPerceivedQualityItem',
+    'WorkFeasibilitySnapshot',
     'AuditEvent',
   ];
 
@@ -132,12 +164,42 @@ async function main() {
     await truncateTargetTables(target, ordered);
 
     const report = [];
-    for (const table of ordered) {
-      // eslint-disable-next-line no-await-in-loop
-      const inserted = await copyTable(source, target, table);
-      report.push({ table, inserted });
-      console.log(`Tabela ${table}: ${inserted} registros`);
+    const pending = [...ordered];
+
+    while (pending.length) {
+      let progressed = false;
+      const stillPending = [];
+
+      for (const table of pending) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          const inserted = await copyTable(source, target, table);
+          report.push({ table, inserted });
+          console.log(`Tabela ${table}: ${inserted} registros`);
+          progressed = true;
+        } catch (error) {
+          const message = String(error?.message || '');
+          const isForeignKeyDependency = message.includes('Code: `23503`');
+          if (isForeignKeyDependency) {
+            stillPending.push(table);
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      if (!progressed) {
+        throw new Error(
+          `Nao foi possivel resolver dependencias entre tabelas. Pendentes: ${stillPending.join(', ')}`,
+        );
+      }
+
+      pending.length = 0;
+      pending.push(...stillPending);
     }
+
+    console.log('Sincronizando sequences/identity (id) no destino...');
+    await resetTargetIdentitySequences(target, ordered);
 
     console.log('\nClonagem concluida com sucesso.');
     console.log(JSON.stringify({ ok: true, report }, null, 2));

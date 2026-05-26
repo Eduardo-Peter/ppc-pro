@@ -4235,16 +4235,24 @@ function feedbackRowSelectedDays(row) {
 }
 
 function feedbackTaskExecutedDaySet(task) {
-  const set = new Set(
+  const actualSet = new Set(
     (task.plannedDays || [])
       .filter((day) => day.actualDate)
       .map((day) => String(day.weekday || '').toUpperCase()),
   );
-  if (set.size) return set;
+  if (actualSet.size) return actualSet;
+
+  // Sem feedback executado, exibe os dias previstos da semana.
+  const plannedSet = new Set(
+    (task.plannedDays || [])
+      .map((day) => String(day.weekday || '').toUpperCase())
+      .filter(Boolean),
+  );
+  if (plannedSet.size) return plannedSet;
 
   const start = task.actualStart ? new Date(task.actualStart) : null;
   const end = task.actualEnd ? new Date(task.actualEnd) : null;
-  if (!start && !end) return set;
+  if (!start && !end) return plannedSet;
 
   const weekDays = weekDisplayWeatherDays(activeWeek());
   let rangeStart = start;
@@ -4261,10 +4269,10 @@ function feedbackTaskExecutedDaySet(task) {
   weekDays.forEach((day) => {
     const dayDate = new Date(day.dayDate);
     if (dayDate.getTime() >= rangeStart.getTime() && dayDate.getTime() <= rangeEnd.getTime()) {
-      set.add(String(day.weekday || '').toUpperCase());
+      plannedSet.add(String(day.weekday || '').toUpperCase());
     }
   });
-  return set;
+  return plannedSet;
 }
 
 function syncFeedbackRowDatesFromDayCheckboxes(row) {
@@ -4469,7 +4477,8 @@ function refreshFeedbackRowCauseSelect(row, keepCurrentSelection = true) {
   }
 }
 
-function refreshFeedbackRowExecutionInputs(row) {
+function refreshFeedbackRowExecutionInputs(row, options = {}) {
+  const clearWhenBlocked = Boolean(options?.clearWhenBlocked);
   const status = String(row.querySelector('.fb-status')?.value || '').toUpperCase();
   const isReserve = row.dataset.reserve === '1';
   const canFeedbackEdit = !$('#saveFeedbackInlineBtn')?.disabled;
@@ -4480,19 +4489,45 @@ function refreshFeedbackRowExecutionInputs(row) {
 
   row.querySelectorAll('.fb-day').forEach((input) => {
     input.disabled = shouldDisable;
-    if (executionBlocked) input.checked = false;
+    if (executionBlocked && clearWhenBlocked) input.checked = false;
   });
 
   const startInput = row.querySelector('.fb-actual-start');
   const endInput = row.querySelector('.fb-actual-end');
   if (startInput) {
     startInput.disabled = shouldDisable;
-    if (executionBlocked) startInput.value = '';
+    if (executionBlocked && clearWhenBlocked) startInput.value = '';
   }
   if (endInput) {
     endInput.disabled = shouldDisable;
-    if (executionBlocked) endInput.value = '';
+    if (executionBlocked && clearWhenBlocked) endInput.value = '';
   }
+}
+
+function applyFeedbackCauseLockByStatus(row, keepCurrentSelection = true) {
+  const statusSelect = row.querySelector('.fb-status');
+  const groupSelect = row.querySelector('.fb-cause-group');
+  const causeSelect = row.querySelector('.fb-cause');
+  if (!statusSelect || !groupSelect || !causeSelect) return;
+  const status = String(statusSelect.value || '').toUpperCase();
+  const isReserve = row.dataset.reserve === '1';
+  const canFeedbackEdit = !$('#saveFeedbackInlineBtn')?.disabled;
+  const shouldLockCause = isReserve || ['EXECUTED', 'EXECUTED_UNPLANNED', 'CANCELLED'].includes(status);
+
+  if (shouldLockCause) {
+    groupSelect.value = '';
+    groupSelect.disabled = true;
+    causeSelect.innerHTML = feedbackCauseOptionsHtml(null, '');
+    causeSelect.value = '';
+    causeSelect.disabled = true;
+    return;
+  }
+
+  if (canFeedbackEdit) {
+    groupSelect.disabled = false;
+  }
+  refreshFeedbackRowCauseSelect(row, keepCurrentSelection);
+  causeSelect.disabled = isReserve || !String(groupSelect.value || '').trim();
 }
 
 function handleFeedbackGridChange(event) {
@@ -4508,20 +4543,8 @@ function handleFeedbackGridChange(event) {
   if (event.target.classList.contains('fb-status')) {
     const status = String(statusSelect.value || '').toUpperCase();
     row.dataset.feedbackStatus = status;
-    refreshFeedbackRowExecutionInputs(row);
-    if (isReserve || ['EXECUTED', 'EXECUTED_UNPLANNED', 'CANCELLED'].includes(status)) {
-      groupSelect.value = '';
-      causeSelect.innerHTML = feedbackCauseOptionsHtml(null, '');
-      causeSelect.value = '';
-      groupSelect.disabled = true;
-      causeSelect.disabled = true;
-      return;
-    }
-    if (!$('#saveFeedbackInlineBtn').disabled && !isReserve) {
-      groupSelect.disabled = false;
-    }
-    refreshFeedbackRowCauseSelect(row, false);
-    causeSelect.disabled = isReserve || !String(groupSelect.value || '').trim();
+    refreshFeedbackRowExecutionInputs(row, { clearWhenBlocked: true });
+    applyFeedbackCauseLockByStatus(row, false);
     applyPlanningRowFilters();
     return;
   }
@@ -4618,6 +4641,7 @@ function restoreFeedbackDraftState(snapshot) {
       row.dataset.feedbackStatus = saved.status;
     }
     refreshFeedbackRowExecutionInputs(row);
+    applyFeedbackCauseLockByStatus(row, true);
 
     const groupSelect = row.querySelector('.fb-cause-group');
     if (groupSelect) {
@@ -4681,8 +4705,8 @@ function applyFeedbackBulkStatus(targetStatus) {
     statusSelect.value = mappedStatus;
     row.dataset.feedbackStatus = mappedStatus;
     row.dataset.dirty = '1';
-    refreshFeedbackRowExecutionInputs(row);
-    refreshFeedbackRowCauseSelect(row, false);
+    refreshFeedbackRowExecutionInputs(row, { clearWhenBlocked: true });
+    applyFeedbackCauseLockByStatus(row, false);
   });
   applyPlanningRowFilters();
 }
@@ -4896,6 +4920,7 @@ function renderTasks() {
     `;
     fbBody.appendChild(trFb);
     refreshFeedbackRowExecutionInputs(trFb);
+    applyFeedbackCauseLockByStatus(trFb, true);
     const shouldShowFeedback = feedbackTaskFilterMatch(task, feedbackStatus, trFb);
     trFb.classList.toggle('row-filter-hidden', !shouldShowFeedback);
   });
