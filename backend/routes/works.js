@@ -20,6 +20,7 @@ const CAUSE_L2_PREFIX = 'L2::';
 const CAUSE_L2_CONTRACTOR_PREFIX = 'L2C::';
 const ZONE_L1_PREFIX = '__ZONE_L1__::';
 const LABOR_MARKER = 'LABOR:';
+const HIDDEN_WORK_PREFIX = '__HIDDEN__';
 let globalCauseCatalogMigrated = false;
 let globalCauseCatalogMigrationPromise = null;
 
@@ -36,6 +37,15 @@ function normalizeLaborTypeName(rawName) {
     .trim()
     .replace(/\s+/g, ' ')
     .toLocaleUpperCase('pt-BR');
+}
+
+function isHiddenWork(work) {
+  const name = String(work?.name || '').trim();
+  if (!name) return false;
+  if (name.toUpperCase() === 'TESTE') return true;
+  if (name.toUpperCase().startsWith(`${HIDDEN_WORK_PREFIX}_`) || name.toUpperCase().startsWith(`${HIDDEN_WORK_PREFIX} `)) return true;
+  if (name.toUpperCase().startsWith(HIDDEN_WORK_PREFIX)) return true;
+  return false;
 }
 
 function isValidPhoneWithDdd(rawPhone) {
@@ -506,7 +516,7 @@ router.get('/works', authenticate, loadUser, asyncHandler(async (req, res) => {
 
   if (allRequested && isAdmin) {
     const works = await prisma.work.findMany({ orderBy: { id: 'asc' } });
-    return res.json(works);
+    return res.json(works.filter((work) => !isHiddenWork(work)));
   }
 
   const assignments = await prisma.userWorkRole.findMany({
@@ -526,7 +536,7 @@ router.get('/works', authenticate, loadUser, asyncHandler(async (req, res) => {
     unique.push(item.work);
   }
 
-  return res.json(unique);
+  return res.json(unique.filter((work) => !isHiddenWork(work)));
 }));
 
 router.post('/works', authenticate, loadUser, asyncHandler(async (req, res) => {
