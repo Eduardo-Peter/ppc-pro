@@ -1163,7 +1163,10 @@ router.get('/works/:workId/weeks', authenticate, loadUser, requireWorkRoles(Obje
 
   const weeks = await prisma.week.findMany({
     where,
-    include: { weatherDays: { orderBy: { dayDate: 'asc' } } },
+    include: {
+      weatherDays: { orderBy: { dayDate: 'asc' } },
+      ppcMeeting: { select: { isClosed: true, id: true } },
+    },
     orderBy: { weekNumber: 'asc' },
   });
 
@@ -1537,6 +1540,43 @@ router.post('/weeks/:weekId/close-pre-planning', authenticate, loadUser, require
     autoSyncedToPlanning: true,
     copiedCount: preTasks.length,
   });
+}));
+
+router.post('/weeks/:weekId/reopen-pre-planning', authenticate, loadUser, requireWeekRoles([ROLES.ADMIN]), asyncHandler(async (req, res) => {
+  if (String(req.week.prePlanningStatus || '').toUpperCase() !== WEEK_STATUS.CLOSED) {
+    return res.status(409).json({ error: 'pre_planning_already_open' });
+  }
+  if (String(req.week.planningStatus || '').toUpperCase() === WEEK_STATUS.CLOSED) {
+    return res.status(409).json({ error: 'planning_closed' });
+  }
+
+  const meeting = await prisma.weekPpcMeeting.findUnique({
+    where: { weekId: req.week.id },
+    select: { isClosed: true },
+  });
+  if (meeting?.isClosed === true) {
+    return res.status(409).json({ error: 'pre_planning_reopen_requires_open_ppc_meeting' });
+  }
+
+  const updated = await prisma.week.update({
+    where: { id: req.week.id },
+    data: {
+      prePlanningStatus: WEEK_STATUS.OPEN,
+      prePlanningClosedAt: null,
+      prePlanningClosedById: null,
+    },
+  });
+
+  await writeAudit({
+    userId: req.user.id,
+    workId: req.workId,
+    entityType: 'WEEK',
+    entityId: req.week.id,
+    eventType: 'PRE_PLANNING_REOPENED',
+    description: `Pré-programação da semana ${req.week.weekNumber} reaberta.`,
+  });
+
+  return res.json(updated);
 }));
 
 router.post('/weeks/:weekId/reopen-requests', authenticate, loadUser, requireWeekRoles([ROLES.ADMIN, ROLES.ENGINEERING, ROLES.CONTROLLER]), asyncHandler(async (req, res) => {
@@ -2494,6 +2534,10 @@ router.get('/weeks/:weekId/ppc-meeting', authenticate, loadUser, requireWeekRole
 }));
 
 router.put('/weeks/:weekId/ppc-meeting/pre', authenticate, loadUser, requireWeekRoles([ROLES.ADMIN, ROLES.ENGINEERING, ROLES.CONTROLLER]), asyncHandler(async (req, res) => {
+  if (String(req.week.prePlanningStatus || '').toUpperCase() !== WEEK_STATUS.CLOSED) {
+    return res.status(409).json({ error: 'ppc_meeting_requires_pre_planning_close' });
+  }
+
   const meetingAt = parseDateTimeInput(req.body.meetingAt);
   if (!meetingAt) return res.status(400).json({ error: 'meeting_datetime_required' });
 
@@ -2518,6 +2562,10 @@ router.put('/weeks/:weekId/ppc-meeting/pre', authenticate, loadUser, requireWeek
 }));
 
 router.put('/weeks/:weekId/ppc-meeting/post', authenticate, loadUser, requireWeekRoles([ROLES.ADMIN, ROLES.ENGINEERING, ROLES.CONTROLLER]), asyncHandler(async (req, res) => {
+  if (String(req.week.prePlanningStatus || '').toUpperCase() !== WEEK_STATUS.CLOSED) {
+    return res.status(409).json({ error: 'ppc_meeting_requires_pre_planning_close' });
+  }
+
   const minutes = String(req.body.minutes || '').trim();
   const attendanceItems = Array.isArray(req.body.attendance) ? req.body.attendance : [];
 

@@ -267,6 +267,24 @@ async function ensurePlanningOpen(weekId) {
   return week.planningStatus === WEEK_STATUS.OPEN;
 }
 
+async function ensurePlanningEditable(weekId) {
+  const week = await prisma.week.findUnique({
+    where: { id: weekId },
+    select: {
+      planningStatus: true,
+      ppcMeeting: { select: { isClosed: true } },
+    },
+  });
+  if (!week) return { ok: false, error: 'week_not_found' };
+  if (String(week.planningStatus || '').toUpperCase() !== WEEK_STATUS.OPEN) {
+    return { ok: false, error: 'planning_closed' };
+  }
+  if (week.ppcMeeting?.isClosed !== true) {
+    return { ok: false, error: 'planning_requires_ppc_meeting_close' };
+  }
+  return { ok: true };
+}
+
 async function ensurePrePlanningOpen(weekId) {
   const week = await prisma.week.findUnique({
     where: { id: weekId },
@@ -382,8 +400,8 @@ router.get('/weeks/:weekId/tasks', authenticate, loadUser, requireWeekRoles(Obje
 }));
 
 router.post('/weeks/:weekId/tasks', authenticate, loadUser, requireWeekRoles([ROLES.ADMIN, ROLES.ENGINEERING, ROLES.CONTROLLER]), asyncHandler(async (req, res) => {
-  const planningOpen = await ensurePlanningOpen(req.week.id);
-  if (!planningOpen) return res.status(409).json({ error: 'planning_closed' });
+  const planningGate = await ensurePlanningEditable(req.week.id);
+  if (!planningGate.ok) return res.status(409).json({ error: planningGate.error });
 
   const {
     sequenceNumber,
@@ -466,8 +484,8 @@ router.post('/weeks/:weekId/tasks', authenticate, loadUser, requireWeekRoles([RO
 }));
 
 router.post('/weeks/:weekId/tasks/from-group', authenticate, loadUser, requireWeekRoles([ROLES.ADMIN, ROLES.ENGINEERING, ROLES.CONTROLLER]), asyncHandler(async (req, res) => {
-  const planningOpen = await ensurePlanningOpen(req.week.id);
-  if (!planningOpen) return res.status(409).json({ error: 'planning_closed' });
+  const planningGate = await ensurePlanningEditable(req.week.id);
+  if (!planningGate.ok) return res.status(409).json({ error: planningGate.error });
 
   const taskGroupId = parseIntId(req.body.taskGroupId);
   if (!taskGroupId) return res.status(400).json({ error: 'taskGroupId_required' });
@@ -781,8 +799,8 @@ router.delete('/pre-tasks/:taskId', authenticate, loadUser, asyncHandler(async (
 }));
 
 router.post('/weeks/:weekId/pre-tasks/sync-to-planning', authenticate, loadUser, requireWeekRoles([ROLES.ADMIN, ROLES.ENGINEERING, ROLES.CONTROLLER]), asyncHandler(async (req, res) => {
-  const planningOpen = await ensurePlanningOpen(req.week.id);
-  if (!planningOpen) return res.status(409).json({ error: 'planning_closed' });
+  const planningGate = await ensurePlanningEditable(req.week.id);
+  if (!planningGate.ok) return res.status(409).json({ error: planningGate.error });
 
   const replace = req.body?.replace === true;
   const onlyIfEmpty = req.body?.onlyIfEmpty !== false;
@@ -869,7 +887,7 @@ router.put('/tasks/:taskId', authenticate, loadUser, asyncHandler(async (req, re
   if (!taskId) return res.status(400).json({ error: 'invalid_task_id' });
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    include: { currentWeek: { select: { id: true, workId: true, planningStatus: true } } },
+    include: { currentWeek: { select: { id: true, workId: true, planningStatus: true, ppcMeeting: { select: { isClosed: true } } } } },
   });
   if (!task) return res.status(404).json({ error: 'task_not_found' });
   req.task = task;
@@ -878,6 +896,9 @@ router.put('/tasks/:taskId', authenticate, loadUser, asyncHandler(async (req, re
 }), requireWorkRoles([ROLES.ADMIN, ROLES.ENGINEERING, ROLES.CONTROLLER], (req) => parseIntId(req.params.workId)), asyncHandler(async (req, res) => {
   if (req.task.currentWeek.planningStatus !== WEEK_STATUS.OPEN) {
     return res.status(409).json({ error: 'planning_closed' });
+  }
+  if (req.task.currentWeek?.ppcMeeting?.isClosed !== true) {
+    return res.status(409).json({ error: 'planning_requires_ppc_meeting_close' });
   }
 
   const {
@@ -937,7 +958,7 @@ router.delete('/tasks/:taskId', authenticate, loadUser, asyncHandler(async (req,
   if (!taskId) return res.status(400).json({ error: 'invalid_task_id' });
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    include: { currentWeek: { select: { id: true, workId: true, planningStatus: true } } },
+    include: { currentWeek: { select: { id: true, workId: true, planningStatus: true, ppcMeeting: { select: { isClosed: true } } } } },
   });
   if (!task) return res.status(404).json({ error: 'task_not_found' });
   req.task = task;
@@ -946,6 +967,9 @@ router.delete('/tasks/:taskId', authenticate, loadUser, asyncHandler(async (req,
 }), requireWorkRoles([ROLES.ADMIN, ROLES.ENGINEERING, ROLES.CONTROLLER], (req) => parseIntId(req.params.workId)), asyncHandler(async (req, res) => {
   if (req.task.currentWeek.planningStatus !== WEEK_STATUS.OPEN) {
     return res.status(409).json({ error: 'planning_closed' });
+  }
+  if (req.task.currentWeek?.ppcMeeting?.isClosed !== true) {
+    return res.status(409).json({ error: 'planning_requires_ppc_meeting_close' });
   }
   if (Number(req.task.originWeekId) !== Number(req.task.currentWeekId)) {
     return res.status(409).json({ error: 'cannot_delete_carried_task' });
@@ -1841,6 +1865,9 @@ doc.end();
 
 router.get('/weeks/:weekId/ppc-meeting/export/convocation/contractor/:contractorId/pdf', authenticate, loadUser, requireWeekRoles(Object.values(ROLES)), asyncHandler(async (req, res) => {
   if (!PDFDocument) return res.status(500).json({ error: 'pdf_dependency_missing' });
+  if (String(req.week.prePlanningStatus || '').toUpperCase() !== WEEK_STATUS.CLOSED) {
+    return res.status(409).json({ error: 'ppc_meeting_requires_pre_planning_close' });
+  }
 
   const contractorId = parseIntId(req.params.contractorId);
   if (!contractorId) return res.status(400).json({ error: 'invalid_contractor_id' });
@@ -2108,6 +2135,9 @@ doc.end();
 
 router.get('/weeks/:weekId/ppc-meeting/export/pre-minutes/pdf', authenticate, loadUser, requireWeekRoles(Object.values(ROLES)), asyncHandler(async (req, res) => {
   if (!PDFDocument) return res.status(500).json({ error: 'pdf_dependency_missing' });
+  if (String(req.week.prePlanningStatus || '').toUpperCase() !== WEEK_STATUS.CLOSED) {
+    return res.status(409).json({ error: 'ppc_meeting_requires_pre_planning_close' });
+  }
   if (req.workRoles.has(ROLES.CONTRACTOR) && ![...req.workRoles].some((r) => PRIVILEGED.has(r))) {
     return res.status(403).json({ error: 'forbidden' });
   }
@@ -4371,8 +4401,13 @@ router.get('/weeks/:weekId/tasks/export/attendance/pdf', authenticate, loadUser,
 router.post('/weeks/:weekId/tasks/import/xlsx', authenticate, loadUser, requireWeekRoles([ROLES.ADMIN, ROLES.ENGINEERING, ROLES.CONTROLLER]), asyncHandler(async (req, res) => {
   const phase = String(req.query.phase || '').trim().toLowerCase();
   const isPrePhase = ['pre', 'preprogramacao', 'pre-programacao', 'pre_programacao'].includes(phase);
-  const planningOpen = isPrePhase ? await ensurePrePlanningOpen(req.week.id) : await ensurePlanningOpen(req.week.id);
-  if (!planningOpen) return res.status(409).json({ error: isPrePhase ? 'pre_planning_closed' : 'planning_closed' });
+  if (isPrePhase) {
+    const prePlanningOpen = await ensurePrePlanningOpen(req.week.id);
+    if (!prePlanningOpen) return res.status(409).json({ error: 'pre_planning_closed' });
+  } else {
+    const planningGate = await ensurePlanningEditable(req.week.id);
+    if (!planningGate.ok) return res.status(409).json({ error: planningGate.error });
+  }
 
   const fileBase64 = String(req.body.fileBase64 || '').trim();
   if (!fileBase64) return res.status(400).json({ error: 'fileBase64_required' });

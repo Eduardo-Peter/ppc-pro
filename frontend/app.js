@@ -321,14 +321,23 @@ function translateApiError(errorCodeOrMessage, fallbackPrefix = 'Erro') {
   if (code === 'pre_planning_already_closed') {
     return 'Pré-programação da semana já está fechada.';
   }
+  if (code === 'pre_planning_already_open') {
+    return 'Pré-programação da semana já está aberta.';
+  }
   if (code === 'pre_planning_not_closed') {
     return 'A pré-programação da semana ainda não foi fechada.';
+  }
+  if (code === 'pre_planning_reopen_requires_open_ppc_meeting') {
+    return 'A Pré-programação só pode ser reaberta quando a Reunião de PPC da mesma semana estiver aberta.';
   }
   if (code === 'planning_not_empty') {
     return 'A programação da semana já possui tarefas. Use a ação de substituir para copiar da pré-programação.';
   }
   if (code === 'planning_not_closed') {
     return 'Planejamento da semana ainda não foi fechado.';
+  }
+  if (code === 'planning_requires_ppc_meeting_close') {
+    return 'Você precisa fechar a lista de presença e ata da Reunião de PPC antes de editar a Programação da semana.';
   }
   if (code === 'close_requires_location_level1') {
     return 'Não é possível fechar a programação sem indicar o local de uma das tarefas';
@@ -1426,9 +1435,19 @@ function syncWeekControlButtons() {
 
   const statusField = planningModeStatusField();
   const planningStatus = String(week[statusField] || '').toUpperCase();
+  if (preMode) {
+    reopenBtn.textContent = 'Reabrir pré-programação';
+  } else {
+    reopenBtn.textContent = hasAnyRole(['ADMIN', 'CONTROLLER']) ? 'Reabrir semana' : 'Solicitar abertura';
+  }
   openBtn.classList.add('hidden');
+  const planningPrereqsReady = String(week.prePlanningStatus || '').toUpperCase() === 'CLOSED'
+    && String(week?.ppcMeeting?.isClosed || '').toLowerCase() === 'true';
   closeBtn.classList.toggle('hidden', planningStatus !== 'OPEN');
-  reopenBtn.classList.toggle('hidden', preMode || planningStatus !== 'CLOSED');
+  closeBtn.disabled = planningStatus !== 'OPEN' || (!preMode && !planningPrereqsReady);
+  const canReopenPre = preMode && hasAnyRole(['ADMIN']) && planningStatus === 'CLOSED';
+  const canReopenPlanning = !preMode && planningStatus === 'CLOSED';
+  reopenBtn.classList.toggle('hidden', !(canReopenPre || canReopenPlanning));
   renderWeekStatusInfo();
 }
 
@@ -4008,24 +4027,27 @@ function renderPpcMeetingTab() {
     return;
   }
 
+  const prePlanningClosed = String(week.prePlanningStatus || '').toUpperCase() === 'CLOSED';
   const closed = meeting.isClosed === true;
   const dateSource = meeting.meetingAt || meeting.suggestedMeetingAt || null;
   dateInput.value = formatDateBrLocalFromIso(dateSource);
   timeInput.value = formatTimeLocalFromIso(dateSource);
   minutesEl.value = String(meeting.minutes || '');
-  dateInput.disabled = closed;
-  timeInput.disabled = closed;
-  minutesEl.disabled = closed;
+  dateInput.disabled = closed || !prePlanningClosed;
+  timeInput.disabled = closed || !prePlanningClosed;
+  minutesEl.disabled = closed || !prePlanningClosed;
 
-  if (savePreBtn) savePreBtn.disabled = closed;
-  if (savePostBtn) savePostBtn.disabled = closed;
-  if (closeBtn) closeBtn.disabled = closed;
-  if (exportPreMinutesBtn) exportPreMinutesBtn.disabled = false;
+  if (savePreBtn) savePreBtn.disabled = closed || !prePlanningClosed;
+  if (savePostBtn) savePostBtn.disabled = closed || !prePlanningClosed;
+  if (closeBtn) closeBtn.disabled = closed || !prePlanningClosed;
+  if (exportPreMinutesBtn) exportPreMinutesBtn.disabled = !prePlanningClosed;
   if (exportMinutesBtn) exportMinutesBtn.disabled = !closed;
   if (sendMinutesBtn) sendMinutesBtn.disabled = !closed;
-  if (exportAllPreBtn) exportAllPreBtn.disabled = String(week.prePlanningStatus || '').toUpperCase() !== 'CLOSED';
+  if (exportAllPreBtn) exportAllPreBtn.disabled = !prePlanningClosed;
   if (closedInfoEl) {
-    if (closed) {
+    if (!prePlanningClosed) {
+      closedInfoEl.textContent = 'Você precisa fechar a pré-programação primeiro';
+    } else if (closed) {
       const closedAt = formatDateTimeBr(meeting.closedAt);
       const closedBy = meeting.closedByName ? ` por ${meeting.closedByName}` : '';
       closedInfoEl.textContent = `Reunião fechada em ${closedAt}${closedBy}.`;
@@ -4049,8 +4071,8 @@ function renderPpcMeetingTab() {
       <td>${escapeHtml(row.communicationEmail || '-')}</td>
       <td>
         <div class="actions-inline">
-          <button type="button" class="secondary" data-ppc-pre-activity-pdf="${row.contractorId}" data-contractor-name="${escapeHtml(row.contractorName || '')}">PDF atividades</button>
-          <button type="button" class="secondary" data-ppc-pre-convocation-pdf="${row.contractorId}" data-contractor-name="${escapeHtml(row.contractorName || '')}">PDF convocação</button>
+          <button type="button" class="secondary" data-ppc-pre-activity-pdf="${row.contractorId}" data-contractor-name="${escapeHtml(row.contractorName || '')}" ${prePlanningClosed ? '' : 'disabled'}>PDF atividades</button>
+          <button type="button" class="secondary" data-ppc-pre-convocation-pdf="${row.contractorId}" data-contractor-name="${escapeHtml(row.contractorName || '')}" ${prePlanningClosed ? '' : 'disabled'}>PDF convocação</button>
         </div>
       </td>
     `;
@@ -4060,7 +4082,7 @@ function renderPpcMeetingTab() {
     trAttendance.innerHTML = `
       <td>${escapeHtml(row.contractorName || '-')}</td>
       <td>${escapeHtml(row.laborType || '-')}</td>
-      <td><input type="checkbox" class="ppc-presence-checkbox" data-contractor-id="${row.contractorId}" ${row.present ? 'checked' : ''} ${closed ? 'disabled' : ''} /></td>
+      <td><input type="checkbox" class="ppc-presence-checkbox" data-contractor-id="${row.contractorId}" ${row.present ? 'checked' : ''} ${(closed || !prePlanningClosed) ? 'disabled' : ''} /></td>
     `;
     attendanceBody.appendChild(trAttendance);
   });
@@ -4809,7 +4831,9 @@ function renderTasks() {
   const week = activeWeek();
   const statusField = planningModeStatusField();
   const weekOpen = String(week?.[statusField] || '').toUpperCase() === 'OPEN';
-  const canEdit = hasAnyRole(EDIT_ROLES) && weekOpen;
+  const ppcMeetingClosedForWeek = String(week?.ppcMeeting?.isClosed || '').toLowerCase() === 'true';
+  const canEditPlanningStage = isPrePlanningMode() || ppcMeetingClosedForWeek;
+  const canEdit = hasAnyRole(EDIT_ROLES) && weekOpen && canEditPlanningStage;
   const canFeedbackEdit = hasAnyRole(EDIT_ROLES)
     && String(week?.planningStatus || '').toUpperCase() === 'CLOSED'
     && String(week?.feedbackStatus || '').toUpperCase() !== 'CLOSED';
@@ -8644,6 +8668,12 @@ async function handlePpcMeetingSavePre() {
   try {
     const week = ppcMeetingWeekSelected();
     if (!week?.id) return setStatus('Selecione uma semana válida na aba Reunião de PPC.', true);
+    if (String(week.prePlanningStatus || '').toUpperCase() !== 'CLOSED') {
+      const message = 'Você precisa fechar a pré-programação primeiro';
+      openPpcMeetingValidationModal(message);
+      setStatus(message, true);
+      return;
+    }
     const meetingDateRaw = String($('#ppcMeetingDate')?.value || '').trim();
     const meetingTimeRaw = String($('#ppcMeetingTime')?.value || '').trim();
     if (!meetingDateRaw || !meetingTimeRaw) return setStatus('Informe data e hora da reunião de PPC.', true);
@@ -8662,6 +8692,12 @@ async function handlePpcMeetingPreMinutesPdfExport() {
   try {
     const week = ppcMeetingWeekSelected();
     if (!week?.id) return setStatus('Selecione uma semana válida na aba Reunião de PPC.', true);
+    if (String(week.prePlanningStatus || '').toUpperCase() !== 'CLOSED') {
+      const message = 'Você precisa fechar a pré-programação primeiro';
+      openPpcMeetingValidationModal(message);
+      setStatus(message, true);
+      return;
+    }
     const blob = await apiBlob(`/weeks/${week.id}/ppc-meeting/export/pre-minutes/pdf`);
     const filename = `PPC-Semana-${week.weekNumber}-Ata-Presenca-Pre-Reuniao.pdf`;
     const url = URL.createObjectURL(blob);
@@ -8682,6 +8718,12 @@ async function handlePpcMeetingSavePost() {
   try {
     const week = ppcMeetingWeekSelected();
     if (!week?.id) return setStatus('Selecione uma semana válida na aba Reunião de PPC.', true);
+    if (String(week.prePlanningStatus || '').toUpperCase() !== 'CLOSED') {
+      const message = 'Você precisa fechar a pré-programação primeiro';
+      openPpcMeetingValidationModal(message);
+      setStatus(message, true);
+      return;
+    }
     const minutes = String($('#ppcMeetingMinutes')?.value || '').trim();
     const attendance = ppcMeetingAttendancePayloadFromScreen();
     await api(`/weeks/${week.id}/ppc-meeting/post`, {
@@ -8699,6 +8741,12 @@ async function handlePpcMeetingClose() {
   try {
     const week = ppcMeetingWeekSelected();
     if (!week?.id) return setStatus('Selecione uma semana válida na aba Reunião de PPC.', true);
+    if (String(week.prePlanningStatus || '').toUpperCase() !== 'CLOSED') {
+      const message = 'Você precisa fechar a pré-programação primeiro';
+      openPpcMeetingValidationModal(message);
+      setStatus(message, true);
+      return;
+    }
     await handlePpcMeetingSavePost();
     await api(`/weeks/${week.id}/ppc-meeting/close`, { method: 'POST' });
     await refreshPpcMeetingTab({ useDefaultNext: false, silent: true });
@@ -8739,6 +8787,12 @@ async function handlePpcMeetingContractorConvocationPdf(contractorId, contractor
   try {
     const week = ppcMeetingWeekSelected();
     if (!week?.id) return setStatus('Selecione uma semana válida na aba Reunião de PPC.', true);
+    if (String(week.prePlanningStatus || '').toUpperCase() !== 'CLOSED') {
+      const message = 'Você precisa fechar a pré-programação primeiro';
+      openPpcMeetingValidationModal(message);
+      setStatus(message, true);
+      return;
+    }
     const blob = await apiBlob(`/weeks/${week.id}/ppc-meeting/export/convocation/contractor/${contractorId}/pdf`);
     const contractorPart = sanitizeFileLabel(contractorName) || `empreiteiro-${contractorId}`;
     const filename = `PPC-Convocacao-Semana-${week.weekNumber}-${contractorPart}.pdf`;
@@ -9329,6 +9383,16 @@ async function runWeekAction(action) {
 
     if (action === 'close') {
       const preMode = isPrePlanningMode();
+      if (!preMode) {
+        const preClosed = String(targetWeek.prePlanningStatus || '').toUpperCase() === 'CLOSED';
+        const meetingClosed = String(targetWeek?.ppcMeeting?.isClosed || '').toLowerCase() === 'true';
+        if (!preClosed || !meetingClosed) {
+          const message = 'Você precisa fechar a pré-programação primeiro e/ou a lista de preseção e ata';
+          openPlanningValidationModal(message, [], { title: 'Fechamento bloqueado' });
+          setStatus(message, true);
+          return;
+        }
+      }
       const rows = [...$('#tasksBody').querySelectorAll('tr[data-sheet-row-kind]')];
       const rowsWithoutLocation = rows
         .map((row, index) => ({
@@ -9355,7 +9419,14 @@ async function runWeekAction(action) {
     }
     if (action === 'reopen') {
       if (isPrePlanningMode()) {
-        setStatus('Reabertura da pré-programação será tratada em fluxo dedicado.', true);
+        if (!hasAnyRole(['ADMIN'])) {
+          setStatus('Somente o Administrador pode reabrir a pré-programação.', true);
+          return;
+        }
+        await api(`/weeks/${targetWeek.id}/reopen-pre-planning`, { method: 'POST' });
+        await loadWeeks();
+        await loadTasksAndDashboard();
+        setStatus('Pré-programação reaberta com sucesso.');
         return;
       }
       if (String(targetWeek?.planningStatus || '').toUpperCase() === 'OPEN') {
@@ -9387,7 +9458,9 @@ async function runWeekAction(action) {
     const code = String(error.message || '').trim();
     const message = translateApiError(code, 'Ação não concluída');
     setStatus(message, true);
-    if (code === 'close_requires_location_level1' || code === 'planning_requires_pre_and_ppc_close') {
+    if (code === 'close_requires_location_level1'
+      || code === 'planning_requires_pre_and_ppc_close'
+      || code === 'pre_planning_reopen_requires_open_ppc_meeting') {
       openPlanningValidationModal(message, [], { title: 'Fechamento bloqueado' });
     }
   }
@@ -9788,6 +9861,12 @@ async function handleSaveWeekSheet() {
         : 'Planejamento da semana está fechado. Reabra a semana para salvar alterações.';
       setStatus(message, true);
       openPlanningValidationModal(message, [], { title: 'Semana Fechada' });
+      return;
+    }
+    if (!preMode && String(targetWeek?.ppcMeeting?.isClosed || '').toLowerCase() !== 'true') {
+      const message = 'Você precisa fechar a pré-programação primeiro e/ou a lista de preseção e ata';
+      setStatus(message, true);
+      openPlanningValidationModal(message, [], { title: 'Fluxo bloqueado' });
       return;
     }
 
