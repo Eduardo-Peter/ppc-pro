@@ -1165,7 +1165,7 @@ router.get('/works/:workId/weeks', authenticate, loadUser, requireWorkRoles(Obje
     where,
     include: {
       weatherDays: { orderBy: { dayDate: 'asc' } },
-      ppcMeeting: { select: { isClosed: true, id: true } },
+      ppcMeeting: { select: { isClosed: true, id: true, closedAt: true } },
     },
     orderBy: { weekNumber: 'asc' },
   });

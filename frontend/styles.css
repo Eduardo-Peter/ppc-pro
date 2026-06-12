@@ -393,6 +393,248 @@ body.side-nav-expanded .side-nav-content {
   color: #1d4f64;
 }
 
+.obra-home-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.obra-home-hero {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #d6e5ee;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f7fcff 0%, #eef8fb 100%);
+  padding: 16px;
+}
+
+.obra-home-branding {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  align-items: center;
+}
+
+.obra-home-logo-wrap {
+  width: 104px;
+  height: 104px;
+  border-radius: 18px;
+  border: 1px solid #c9dde8;
+  background: #ffffff;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.obra-home-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 10px;
+}
+
+.obra-home-logo-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1.2rem;
+  background: linear-gradient(150deg, var(--accent), var(--accent2));
+}
+
+.obra-home-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.obra-home-kicker {
+  margin: 0;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #5b7788;
+  font-weight: 700;
+}
+
+.obra-home-address,
+.obra-home-intro {
+  margin: 0;
+  color: #56707f;
+}
+
+.obra-home-sections {
+  display: grid;
+  gap: 12px;
+}
+
+.obra-home-status-section {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8fcff;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.obra-home-status-section h3 {
+  font-size: 0.96rem;
+  color: #1a4b61;
+}
+
+.obra-home-status-wrap {
+  overflow-x: auto;
+}
+
+.obra-home-status-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.obra-home-status-table th,
+.obra-home-status-table td {
+  border: 1px solid #d4e3ee;
+  padding: 8px 6px;
+  text-align: center;
+  vertical-align: middle;
+  white-space: normal;
+}
+
+.obra-home-status-table th {
+  background: #dcebf7;
+  color: #315466;
+  font-size: 0.74rem;
+}
+
+.obra-home-status-week {
+  font-weight: 700;
+  color: #173847;
+}
+
+.obra-home-status-date {
+  font-size: 0.78rem;
+  color: #486574;
+}
+
+.obra-home-stage {
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+.obra-home-stage--ok {
+  background: #dff5e7;
+  color: #0f5638;
+}
+
+.obra-home-stage--today {
+  background: #fff3bf;
+  color: #7a5b00;
+}
+
+.obra-home-stage--late {
+  background: #f6d8dc;
+  color: #8e2432;
+}
+
+.obra-home-stage--unknown {
+  background: #eef4f7;
+  color: #4f6878;
+}
+
+.obra-home-status-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+  color: #4f6878;
+  font-size: 0.8rem;
+}
+
+.legend-chip {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.legend-green {
+  background: #dff5e7;
+}
+
+.legend-yellow {
+  background: #fff3bf;
+}
+
+.legend-red {
+  background: #f6d8dc;
+}
+
+.obra-home-section {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8fcff;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.obra-home-section h3 {
+  font-size: 0.96rem;
+  color: #1a4b61;
+}
+
+.obra-home-links {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.obra-home-link {
+  text-align: left;
+  border: 1px solid #d4e3ee;
+  background: #ffffff;
+  color: #16313e;
+  font-weight: 700;
+}
+
+.obra-home-link:hover {
+  border-color: #87b4c8;
+  background: #eef7fd;
+}
+
+.ppc-meeting-status {
+  margin-top: 0;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #c7d6df;
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.ppc-meeting-status--blocked {
+  background: linear-gradient(90deg, #f0ddff, #e5ccfb);
+  border-color: #ccb0e8;
+  color: #4f2c5f;
+}
+
+.ppc-meeting-status--open {
+  background: linear-gradient(90deg, #d8edf7, #c7e3f0);
+  border-color: #b9d3e1;
+  color: #143949;
+}
+
+.ppc-meeting-status--closed {
+  background: linear-gradient(90deg, #d9f6e8, #c8ecd9);
+  border-color: #a4d8be;
+  color: #0f4d3c;
+}
+
 .icon-btn {
   min-width: 32px;
   padding: 6px 8px;
@@ -1626,6 +1868,10 @@ th {
   padding: 8px 10px;
 }
 
+.weather-mini-thumb.is-draggable {
+  cursor: default;
+}
+
 .weather-mini-title {
   font-size: 0.72rem;
   font-weight: 700;
@@ -1633,6 +1879,9 @@ th {
   margin-bottom: 4px;
   text-transform: uppercase;
   letter-spacing: 0.02em;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
 }
 
 .weather-mini-row {
@@ -2026,5 +2275,14 @@ footer {
     min-width: 0;
     width: min(92vw, 360px);
     max-width: 92vw;
+  }
+
+  .obra-home-branding {
+    grid-template-columns: 1fr;
+  }
+
+  .obra-home-logo-wrap {
+    width: 84px;
+    height: 84px;
   }
 }

@@ -65,6 +65,7 @@ const state = {
   closeFeedbackPending: false,
   weatherMiniObserver: null,
   weatherStripVisible: true,
+  weatherMiniPosition: null,
   zoneCollapsedParents: new Set(),
   zoneCollapsedWorkId: null,
   editingZoneLevel1ModalId: null,
@@ -290,10 +291,12 @@ function closePpcMeetingValidationModal() {
   modal.classList.add('hidden');
 }
 
-function openPpcMeetingValidationModal(message) {
+function openPpcMeetingValidationModal(message, options = {}) {
   const modal = $('#ppcMeetingValidationModal');
+  const titleEl = $('#ppcMeetingValidationTitle');
   const messageEl = $('#ppcMeetingValidationMessage');
   if (!modal || !messageEl) return;
+  if (titleEl) titleEl.textContent = options.title || 'Fechamento bloqueado';
   messageEl.textContent = message;
   modal.classList.remove('hidden');
 }
@@ -1043,6 +1046,192 @@ function selectedWork() {
   return state.availableWorks.find((item) => Number(item.id) === Number(state.selectedWorkId))
     || state.userWorks.find((item) => Number(item.id) === Number(state.selectedWorkId))
     || null;
+}
+
+function selectedWorkAddress() {
+  const work = selectedWork();
+  if (!work) return '-';
+  const parts = [
+    work.street,
+    work.number,
+    work.complement,
+    work.neighborhood,
+    work.city,
+    work.state,
+    work.cep,
+  ].map((item) => String(item || '').trim()).filter(Boolean);
+  return parts.length ? parts.join(' | ') : '-';
+}
+
+function renderWorkWelcomePanel() {
+  const work = selectedWork();
+  const titleEl = $('#obraHomeTitle');
+  const addressEl = $('#obraHomeAddress');
+  const logoEl = $('#obraHomeLogo');
+  const fallbackEl = $('#obraHomeLogoFallback');
+  const statusBody = $('#obraHomeStatusBody');
+  if (!titleEl || !addressEl || !logoEl || !fallbackEl) return;
+
+  titleEl.textContent = work?.name || 'Obra não selecionada';
+  addressEl.textContent = selectedWorkAddress();
+
+  const logoPath = String(state.appConfig?.logoPath || '').trim();
+  if (logoPath) {
+    logoEl.src = logoPath;
+    logoEl.classList.remove('hidden');
+    fallbackEl.classList.add('hidden');
+  } else {
+    logoEl.removeAttribute('src');
+    logoEl.classList.add('hidden');
+    fallbackEl.classList.remove('hidden');
+  }
+
+  if (statusBody) renderWorkWelcomeStatusTable();
+}
+
+function workWeekByNumber(weekNumber) {
+  const normalized = Number.parseInt(weekNumber, 10);
+  if (!normalized || normalized <= 0) return null;
+  return state.weeks.find((item) => Number(item.weekNumber) === normalized)
+    || virtualWeekByNumber(normalized);
+}
+
+function homeTrackedWeeks() {
+  const current = suggestedCurrentWeekNumberForCurrentWork();
+  if (!current) return [];
+  return [-2, -1, 0, 1]
+    .map((offset) => {
+      const weekNumber = Math.max(1, current + offset);
+      const week = workWeekByNumber(weekNumber);
+      return {
+        label: offset === 0 ? 'Semana Atual' : `Semana ${offset > 0 ? '+' : ''}${offset}`,
+        weekNumber,
+        week,
+      };
+    })
+    .filter((row, index, arr) => arr.findIndex((item) => item.weekNumber === row.weekNumber) === index);
+}
+
+function homeStageStatus(week, stageKey) {
+  const rule = state.notificationRule || {};
+  const statusMap = {
+    prePlanning: {
+      isClosed: String(week?.prePlanningStatus || '').toUpperCase() === 'CLOSED',
+      closedAt: week?.prePlanningClosedAt || null,
+      weekday: rule.prePlanningDeadlineWeekday,
+      timeText: rule.prePlanningDeadlineTime,
+      scope: 'PREVIOUS_WEEK',
+    },
+    ppcMeeting: {
+      isClosed: week?.ppcMeeting?.isClosed === true,
+      closedAt: week?.ppcMeeting?.closedAt || null,
+      weekday: rule.ppcMeetingDeadlineWeekday,
+      timeText: rule.ppcMeetingDeadlineTime,
+      scope: 'PREVIOUS_WEEK',
+    },
+    planning: {
+      isClosed: String(week?.planningStatus || '').toUpperCase() === 'CLOSED',
+      closedAt: week?.planningClosedAt || null,
+      weekday: rule.planningDeadlineWeekday,
+      timeText: rule.planningDeadlineTime,
+      scope: 'PREVIOUS_WEEK',
+    },
+    feedback: {
+      isClosed: String(week?.feedbackStatus || '').toUpperCase() === 'CLOSED',
+      closedAt: week?.feedbackClosedAt || null,
+      weekday: rule.feedbackDeadlineWeekday,
+      timeText: rule.feedbackDeadlineTime,
+      scope: 'CURRENT_WEEK',
+    },
+    quality: {
+      isClosed: String(week?.qualityStatus || '').toUpperCase() === 'CLOSED',
+      closedAt: week?.qualityClosedAt || null,
+      weekday: rule.qualityDeadlineWeekday || rule.feedbackDeadlineWeekday,
+      timeText: rule.qualityDeadlineTime || rule.feedbackDeadlineTime,
+      scope: 'CURRENT_WEEK',
+    },
+  };
+
+  const config = statusMap[stageKey];
+  if (!config) return { mark: '-', variant: 'unknown', title: 'Etapa não mapeada.' };
+  const deadline = weekDeadlineDateByRule(week, config.weekday, config.timeText, config.scope);
+  const nowWallClock = timeZoneWallClockNow(state.workTimeZone || 'America/Sao_Paulo');
+  const todayKey = dateKeyLocal(nowWallClock);
+  const deadlineKey = dateKeyLocal(deadline);
+
+  if (config.isClosed) {
+    const closedAt = config.closedAt ? new Date(config.closedAt) : null;
+    const onTime = !deadline || !closedAt || closedAt.getTime() <= deadline.getTime();
+    return {
+      mark: 'V',
+      variant: onTime ? 'ok' : 'late',
+      title: onTime ? 'Etapa fechada no prazo.' : 'Etapa fechada fora do prazo.',
+    };
+  }
+
+  if (!deadline) {
+    return {
+      mark: 'X',
+      variant: 'unknown',
+      title: 'Prazo não definido para esta etapa.',
+    };
+  }
+
+  if (todayKey === deadlineKey) {
+    return {
+      mark: 'X',
+      variant: 'today',
+      title: 'Prazo vence hoje.',
+    };
+  }
+
+  if (nowWallClock.getTime() > deadline.getTime()) {
+    return {
+      mark: 'X',
+      variant: 'late',
+      title: 'Prazo vencido.',
+    };
+  }
+
+  return {
+    mark: 'X',
+    variant: 'ok',
+    title: 'Etapa ainda dentro do prazo.',
+  };
+}
+
+function renderWorkWelcomeStatusTable() {
+  const body = $('#obraHomeStatusBody');
+  if (!body) return;
+  const rows = homeTrackedWeeks();
+  body.innerHTML = '';
+
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="8">Sem dados suficientes para montar o painel das semanas.</td></tr>';
+    return;
+  }
+
+  rows.forEach(({ label, weekNumber, week }) => {
+    const startText = formatDate(week?.startDate);
+    const endText = formatDate(week?.endDate);
+    const stages = [
+      homeStageStatus(week, 'prePlanning'),
+      homeStageStatus(week, 'ppcMeeting'),
+      homeStageStatus(week, 'planning'),
+      homeStageStatus(week, 'feedback'),
+      homeStageStatus(week, 'quality'),
+    ];
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="obra-home-status-week">${escapeHtml(label)}<br><small>Sem. ${escapeHtml(String(weekNumber))}</small></td>
+      <td class="obra-home-status-date">${escapeHtml(startText)}</td>
+      <td class="obra-home-status-date">${escapeHtml(endText)}</td>
+      ${stages.map((stage) => (
+        `<td class="obra-home-stage obra-home-stage--${escapeHtml(stage.variant)}" title="${escapeHtml(stage.title)}">${escapeHtml(stage.mark)}</td>`
+      )).join('')}
+    `;
+    body.appendChild(tr);
+  });
 }
 
 function startOfDayLocalFromInput(value) {
@@ -2106,7 +2295,7 @@ function refreshNavigationVisibility() {
   if (obraCadastrosTabBtn) obraCadastrosTabBtn.classList.toggle('hidden', !isObraMode);
   if (obraCadastrosPanel) obraCadastrosPanel.classList.toggle('hidden', !isObraMode);
   if (isObraMode && activeTabName() === 'cadastros') {
-    selectTab('programacao');
+    selectTab('obrahome');
     return;
   }
   if (!isObraMode && activeTabName() === 'cadastrosObra') {
@@ -2300,6 +2489,27 @@ function handleSideNavItemClick(event) {
 
   renderSideNavActiveState();
   if (isMobileViewport()) closeSideNavMobile();
+}
+
+function handleWorkHomeLinkClick(event) {
+  const button = event.target.closest('.obra-home-link');
+  if (!button) return;
+  const main = String(button.dataset.workHomeLink || '').trim();
+  const dashboard = String(button.dataset.workHomeDashboard || '').trim();
+  const obra = String(button.dataset.workHomeObra || '').trim();
+  if (!main) return;
+
+  if (dashboard) {
+    selectTab('gestao');
+    selectDashboardSubtab(dashboard);
+    return;
+  }
+  if (obra) {
+    selectTab('cadastrosObra');
+    selectObraCadastroTab(obra);
+    return;
+  }
+  selectTab(main);
 }
 
 function applyAppMode() {
@@ -3559,8 +3769,12 @@ function applyPlanningHolidayHighlights() {
 
 function renderWeather() {
   const strip = $('#weatherStrip');
+  const titleEl = $('#planningWeatherTitle');
   strip.innerHTML = '';
   const rows = weekDisplayWeatherDaysWithSunday(planningWeekContext());
+  if (titleEl) {
+    titleEl.textContent = 'Previsão do tempo (domingo a sábado)';
+  }
   if (!rows.length) {
     strip.innerHTML = '<p>Sem previsão para a semana selecionada.</p>';
     applyPlanningHolidayHighlights();
@@ -3613,6 +3827,8 @@ function renderWeatherMiniThumb() {
     <div class="weather-mini-title">Previsão da semana</div>
     <div class="weather-mini-row">${items}</div>
   `;
+  mini.classList.add('is-draggable');
+  applyWeatherMiniThumbPosition();
   mini.classList.remove('hidden');
 }
 
@@ -3626,6 +3842,98 @@ function setupWeatherMiniThumbObserver() {
     renderWeatherMiniThumb();
   }, { threshold: 0.05 });
   state.weatherMiniObserver.observe(strip);
+}
+
+function weatherMiniStorageKey() {
+  return `ppc-weather-mini-pos-${Number(state.selectedWorkId) || 0}`;
+}
+
+function loadWeatherMiniThumbPosition() {
+  if (state.weatherMiniPosition) return state.weatherMiniPosition;
+  try {
+    const raw = window.localStorage.getItem(weatherMiniStorageKey());
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Number.isFinite(parsed?.left) && Number.isFinite(parsed?.top)) {
+      state.weatherMiniPosition = { left: parsed.left, top: parsed.top };
+      return state.weatherMiniPosition;
+    }
+  } catch {
+    // ignora armazenamento corrompido
+  }
+  return null;
+}
+
+function persistWeatherMiniThumbPosition(position) {
+  state.weatherMiniPosition = position;
+  try {
+    window.localStorage.setItem(weatherMiniStorageKey(), JSON.stringify(position));
+  } catch {
+    // ignora falha de persistência local
+  }
+}
+
+function applyWeatherMiniThumbPosition() {
+  const mini = $('#weatherMiniThumb');
+  if (!mini) return;
+  const pos = loadWeatherMiniThumbPosition();
+  if (pos?.left != null && pos?.top != null) {
+    mini.style.left = `${pos.left}px`;
+    mini.style.top = `${pos.top}px`;
+    mini.style.transform = 'none';
+    return;
+  }
+  mini.style.left = '';
+  mini.style.top = '';
+  mini.style.transform = '';
+}
+
+function setupWeatherMiniThumbDrag() {
+  const mini = $('#weatherMiniThumb');
+  if (!mini || mini.dataset.dragBound === 'true') return;
+  mini.dataset.dragBound = 'true';
+
+  let dragState = null;
+  const startDrag = (event) => {
+    const handle = event.target.closest('.weather-mini-title');
+    if (!handle) return;
+    const pointer = 'touches' in event ? event.touches[0] : event;
+    const rect = mini.getBoundingClientRect();
+    dragState = {
+      offsetX: pointer.clientX - rect.left,
+      offsetY: pointer.clientY - rect.top,
+    };
+    mini.style.transform = 'none';
+    event.preventDefault();
+  };
+  const moveDrag = (event) => {
+    if (!dragState) return;
+    const pointer = 'touches' in event ? event.touches[0] : event;
+    const width = mini.offsetWidth || 260;
+    const height = mini.offsetHeight || 80;
+    const nextLeft = Math.min(
+      Math.max(8, pointer.clientX - dragState.offsetX),
+      Math.max(8, window.innerWidth - width - 8),
+    );
+    const nextTop = Math.min(
+      Math.max(88, pointer.clientY - dragState.offsetY),
+      Math.max(88, window.innerHeight - height - 8),
+    );
+    mini.style.left = `${nextLeft}px`;
+    mini.style.top = `${nextTop}px`;
+    persistWeatherMiniThumbPosition({ left: nextLeft, top: nextTop });
+    event.preventDefault();
+  };
+  const endDrag = () => {
+    dragState = null;
+  };
+
+  mini.addEventListener('mousedown', startDrag);
+  mini.addEventListener('touchstart', startDrag, { passive: false });
+  window.addEventListener('mousemove', moveDrag);
+  window.addEventListener('touchmove', moveDrag, { passive: false });
+  window.addEventListener('mouseup', endDrag);
+  window.addEventListener('touchend', endDrag);
 }
 
 function taskOriginWeekNumber(task) {
@@ -4046,12 +4354,15 @@ function renderPpcMeetingTab() {
   if (exportAllPreBtn) exportAllPreBtn.disabled = !prePlanningClosed;
   if (closedInfoEl) {
     if (!prePlanningClosed) {
+      closedInfoEl.className = 'ppc-meeting-status ppc-meeting-status--blocked';
       closedInfoEl.textContent = 'Você precisa fechar a pré-programação primeiro';
     } else if (closed) {
       const closedAt = formatDateTimeBr(meeting.closedAt);
       const closedBy = meeting.closedByName ? ` por ${meeting.closedByName}` : '';
+      closedInfoEl.className = 'ppc-meeting-status ppc-meeting-status--closed';
       closedInfoEl.textContent = `Reunião fechada em ${closedAt}${closedBy}.`;
     } else {
+      closedInfoEl.className = 'ppc-meeting-status ppc-meeting-status--open';
       closedInfoEl.textContent = 'Reunião ainda não fechada.';
     }
   }
@@ -6224,20 +6535,33 @@ async function loadReferenceData() {
   renderQualityTable(state.qualityData);
 }
 
+async function fetchWeatherForWeek(weekId, options = {}) {
+  const targetWeekId = Number(weekId);
+  if (!targetWeekId) return null;
+  const silent = options.silent !== false;
+  const showErrorStatus = options.showErrorStatus === true;
+  try {
+    const weatherFetch = await api(`/weeks/${targetWeekId}/weather/fetch`, { method: 'POST' });
+    if (weatherFetch?.weatherDays) {
+      applyWeatherFetchExtras(targetWeekId, weatherFetch.weatherDays);
+      applyCachedWeatherExtrasToWeeks();
+      if (options.render !== false) renderWeather();
+    }
+    return weatherFetch;
+  } catch (error) {
+    if (!silent || showErrorStatus) {
+      setStatus(`Não foi possível atualizar a previsão do tempo: ${error.message}`, true);
+    }
+    return null;
+  }
+}
+
 async function loadWeeks() {
   state.weeks = await api(`/works/${state.selectedWorkId}/weeks`);
   applyCachedWeatherExtrasToWeeks();
   renderWeeks();
   if (state.selectedWeekId && !state.weatherExtrasByWeekId[Number(state.selectedWeekId)]) {
-    try {
-      const weatherFetch = await api(`/weeks/${state.selectedWeekId}/weather/fetch`, { method: 'POST' });
-      if (weatherFetch?.weatherDays) {
-        applyWeatherFetchExtras(state.selectedWeekId, weatherFetch.weatherDays);
-        applyCachedWeatherExtrasToWeeks();
-      }
-    } catch {
-      // não bloqueia carregamento da tela
-    }
+    await fetchWeatherForWeek(state.selectedWeekId, { silent: true, render: false });
   }
   if (!numericWeekField()) {
     suggestNextWeekNumber();
@@ -6250,6 +6574,7 @@ async function loadWeeks() {
   updateDashboardWeekPreview();
   syncPlanningModeUi();
   renderWeather();
+  renderWorkWelcomePanel();
 }
 
 async function loadTasksAndDashboard() {
@@ -6295,11 +6620,7 @@ async function ensureWeekExists(weekNumber, options = {}) {
       method: 'POST',
       body: { weekNumber: normalizedWeekNumber },
     });
-    try {
-      await api(`/weeks/${created.id}/weather/fetch`, { method: 'POST' });
-    } catch {
-      // não bloqueia criação automática da semana
-    }
+    await fetchWeatherForWeek(created.id, { silent: true, render: false });
     await loadWeeks();
     found = state.weeks.find((item) => Number(item.weekNumber) === normalizedWeekNumber) || created;
     if (!silent) setStatus(`Semana ${normalizedWeekNumber} aberta automaticamente.`);
@@ -6350,17 +6671,11 @@ async function autoLoadProgramacaoTab(options = {}) {
   }
 
   let weatherFetch = null;
-  try {
-    weatherFetch = await api(`/weeks/${state.selectedWeekId}/weather/fetch`, { method: 'POST' });
-  } catch {
-    // Mantém carregamento de tarefas mesmo se o clima falhar.
-  }
+  weatherFetch = await fetchWeatherForWeek(state.selectedWeekId, { silent: true, render: false });
 
   await loadWeeks();
   syncWeekFieldWithSelectedWeek();
   if (weatherFetch?.weatherDays) {
-    applyWeatherFetchExtras(state.selectedWeekId, weatherFetch.weatherDays);
-    applyCachedWeatherExtrasToWeeks();
     renderWeather();
   }
   syncTaskDayCheckboxesFromDates();
@@ -6380,6 +6695,7 @@ async function refreshContext() {
   await loadReferenceData();
   await ensureSelectedWorkTimeZone();
   await loadAppConfig();
+  renderWorkWelcomePanel();
 
   if (state.appMode === 'cadastros') {
     state.sheetDraftRows = [];
@@ -6436,6 +6752,9 @@ function selectTab(name) {
   refreshNavigationVisibility();
   renderSideNavActiveState();
   syncPlanningModeUi();
+  if (name === 'obrahome') {
+    renderWorkWelcomePanel();
+  }
   if (name === 'atividades') {
     refreshExpectedActivitiesTab({ useDefaultNext: true, silent: true })
       .catch((error) => setStatus(`Erro ao atualizar atividades previstas: ${error.message}`, true));
@@ -6548,6 +6867,7 @@ async function proceedAdminBySelection() {
   if (!selected) return setStatus('Selecione uma obra.', true);
   state.appMode = 'obra';
   state.selectedWorkId = selected;
+  state.weatherMiniPosition = null;
   state.selectedWeekId = null;
   state.weeks = [];
   state.qualityWeekId = null;
@@ -6555,7 +6875,7 @@ async function proceedAdminBySelection() {
   state.qualityData = null;
   $('#gatewayView').classList.add('hidden');
   $('#appView').classList.remove('hidden');
-  selectTab('programacao');
+  selectTab('obrahome');
   showCadastroView('users');
   await refreshContext();
   setStatus('Acesso à obra carregado.');
@@ -6604,6 +6924,7 @@ async function proceedAdminByCreation() {
     state.userWorks = await api('/works');
     state.appMode = 'obra';
     state.selectedWorkId = created.id;
+    state.weatherMiniPosition = null;
     state.selectedWeekId = null;
     state.weeks = [];
     state.qualityWeekId = null;
@@ -6612,7 +6933,7 @@ async function proceedAdminByCreation() {
 
     $('#gatewayView').classList.add('hidden');
     $('#appView').classList.remove('hidden');
-    selectTab('programacao');
+    selectTab('obrahome');
     showCadastroView('users');
     await refreshContext();
     resetGatewayCreateForm();
@@ -6736,6 +7057,7 @@ async function proceedUserBySelection() {
   if (!selected) return setStatus('Selecione uma obra.', true);
   state.appMode = 'obra';
   state.selectedWorkId = selected;
+  state.weatherMiniPosition = null;
   state.selectedWeekId = null;
   state.weeks = [];
   state.qualityWeekId = null;
@@ -6743,7 +7065,7 @@ async function proceedUserBySelection() {
   state.qualityData = null;
   $('#gatewayView').classList.add('hidden');
   $('#appView').classList.remove('hidden');
-  selectTab('programacao');
+  selectTab('obrahome');
   await refreshContext();
   setStatus('Acesso à obra carregado.');
 }
@@ -6755,6 +7077,7 @@ function backToStart() {
 
 async function handleWorkChange() {
   state.selectedWorkId = Number($('#workSelect').value);
+  state.weatherMiniPosition = null;
   state.selectedWeekId = null;
   state.sheetDraftRows = [];
   state.expectedWeekId = null;
@@ -6779,22 +7102,13 @@ async function handleWorkChange() {
 async function handleWeekChange() {
   state.selectedWeekId = Number($('#weekSelect').value);
   state.sheetDraftRows = [];
-  let weatherFetch = null;
   try {
     if (state.selectedWeekId) {
-      try {
-        weatherFetch = await api(`/weeks/${state.selectedWeekId}/weather/fetch`, { method: 'POST' });
-      } catch {
-        // Mantém a navegação mesmo se o provedor de clima falhar momentaneamente.
-      }
+      await fetchWeatherForWeek(state.selectedWeekId, { silent: true, render: false });
     }
     await loadWeeks();
     syncWeekFieldWithSelectedWeek();
-    if (weatherFetch?.weatherDays) {
-      applyWeatherFetchExtras(state.selectedWeekId, weatherFetch.weatherDays);
-      applyCachedWeatherExtrasToWeeks();
-      renderWeather();
-    }
+    renderWeather();
     syncTaskDayCheckboxesFromDates();
     await loadTasksAndDashboard();
     setStatus('Semana alterada.');
@@ -6817,20 +7131,11 @@ async function handleWeekNumberChange() {
 
   state.selectedWeekId = existing.id;
   state.sheetDraftRows = [];
-  let weatherFetch = null;
   try {
-    try {
-      weatherFetch = await api(`/weeks/${state.selectedWeekId}/weather/fetch`, { method: 'POST' });
-    } catch {
-      // Não bloqueia a programação caso o provedor falhe.
-    }
+    await fetchWeatherForWeek(state.selectedWeekId, { silent: true, render: false });
     await loadWeeks();
     syncWeekFieldWithSelectedWeek();
-    if (weatherFetch?.weatherDays) {
-      applyWeatherFetchExtras(state.selectedWeekId, weatherFetch.weatherDays);
-      applyCachedWeatherExtrasToWeeks();
-      renderWeather();
-    }
+    renderWeather();
     syncTaskDayCheckboxesFromDates();
     await loadTasksAndDashboard();
     setStatus(`Semana ${weekNumber} selecionada para programação.`);
@@ -8228,20 +8533,13 @@ async function handleWeekCreate(event) {
         weekNumber,
       },
     });
-    let weatherOk = true;
-    let weatherFetch = null;
-    try {
-      weatherFetch = await api(`/weeks/${created.id}/weather/fetch`, { method: 'POST' });
-    } catch {
-      weatherOk = false;
-    }
+    const weatherFetch = await fetchWeatherForWeek(created.id, { silent: true, render: false });
+    const weatherOk = Boolean(weatherFetch?.weatherDays);
     state.selectedWeekId = created.id;
     state.sheetDraftRows = [];
     await loadWeeks();
     syncWeekFieldWithSelectedWeek();
     if (weatherFetch?.weatherDays) {
-      applyWeatherFetchExtras(state.selectedWeekId, weatherFetch.weatherDays);
-      applyCachedWeatherExtrasToWeeks();
       renderWeather();
     }
     await loadTasksAndDashboard();
@@ -8264,17 +8562,10 @@ async function handleWeekRefresh() {
       return;
     }
 
-    let weatherFetch = null;
-    try {
-      weatherFetch = await api(`/weeks/${targetWeek.id}/weather/fetch`, { method: 'POST' });
-    } catch {
-      // não bloqueia atualização das atividades
-    }
+    const weatherFetch = await fetchWeatherForWeek(targetWeek.id, { silent: true, render: false });
 
     await loadWeeks();
     if (weatherFetch?.weatherDays) {
-      applyWeatherFetchExtras(targetWeek.id, weatherFetch.weatherDays);
-      applyCachedWeatherExtrasToWeeks();
       renderWeather();
     }
     await loadTasksAndDashboard();
@@ -8750,6 +9041,9 @@ async function handlePpcMeetingClose() {
     await handlePpcMeetingSavePost();
     await api(`/weeks/${week.id}/ppc-meeting/close`, { method: 'POST' });
     await refreshPpcMeetingTab({ useDefaultNext: false, silent: true });
+    openPpcMeetingValidationModal(`Lista de presença e ata da Semana ${week.weekNumber} foram fechadas com sucesso.`, {
+      title: 'Reunião de PPC Fechada',
+    });
     setStatus(`Reunião de PPC da Semana ${week.weekNumber} fechada.`);
   } catch (error) {
     const code = String(error.message || '').trim();
@@ -10119,6 +10413,7 @@ function setDefaultWeekFields() {
 function bindEvents() {
   $('#loginForm').addEventListener('submit', handleLogin);
   $('#sideNav').addEventListener('click', handleSideNavItemClick);
+  $('#appView').addEventListener('click', handleWorkHomeLinkClick);
   $('#sideNav').addEventListener('mouseenter', () => {
     if (!isMobileViewport()) document.body.classList.add('side-nav-expanded');
   });
@@ -10599,6 +10894,7 @@ showCadastroView('users');
 bindEvents();
 setupTypeAheadSelectFilter();
 setupWeatherMiniThumbObserver();
+setupWeatherMiniThumbDrag();
 startDeadlineCountdownTicker();
 resetUserForm();
 resetPermissionProfileForm();

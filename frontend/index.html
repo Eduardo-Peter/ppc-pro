@@ -148,6 +148,7 @@
 
           <section class="side-nav-group" data-side-mode="obra">
             <h3>Programação Semanal</h3>
+            <button type="button" class="side-nav-item" data-side-main="obrahome">Tela Inicial</button>
             <button type="button" class="side-nav-item" data-side-main="preprogramacao">Pré-Programação da Semana</button>
             <button type="button" class="side-nav-item" data-side-main="reuniaoppc">Reunião de PPC</button>
             <button type="button" class="side-nav-item" data-side-main="programacao">Programação da Semana</button>
@@ -195,6 +196,7 @@
 
       <section class="tabs" id="mainTabs">
         <button type="button" class="tab-btn active" data-tab="cadastros">Cadastros</button>
+        <button type="button" class="tab-btn hidden" data-tab="obrahome">Tela Inicial</button>
         <button type="button" class="tab-btn" data-tab="preprogramacao">Pré-programação da semana</button>
         <button type="button" class="tab-btn" data-tab="reuniaoppc">Reunião de PPC</button>
         <button type="button" class="tab-btn" data-tab="programacao">Programação da semana</button>
@@ -861,6 +863,95 @@
         </article>
       </section>
 
+      <section class="tab-panel" data-tab-panel="obrahome">
+        <article class="panel obra-home-panel">
+          <div class="obra-home-hero">
+            <div class="obra-home-branding">
+              <div id="obraHomeLogoWrap" class="obra-home-logo-wrap">
+                <img id="obraHomeLogo" class="obra-home-logo hidden" alt="Logo da construtora" />
+                <div id="obraHomeLogoFallback" class="obra-home-logo-fallback">PPC</div>
+              </div>
+              <div class="obra-home-copy">
+                <p class="obra-home-kicker">Bem-vindo à obra</p>
+                <h2 id="obraHomeTitle">-</h2>
+                <p id="obraHomeAddress" class="obra-home-address">-</p>
+              </div>
+            </div>
+            <p class="obra-home-intro">
+              Escolha abaixo o módulo que deseja acessar. O menu lateral continua disponível para navegação completa.
+            </p>
+          </div>
+
+          <section class="obra-home-status-section">
+            <h3>Painel Resumido das Semanas</h3>
+            <div class="obra-home-status-wrap">
+              <table class="obra-home-status-table">
+                <thead>
+                  <tr>
+                    <th>Semana</th>
+                    <th>Início</th>
+                    <th>Fim</th>
+                    <th>Pré-Programação</th>
+                    <th>Reunião Semanal</th>
+                    <th>Programação</th>
+                    <th>Feedback</th>
+                    <th>Qualidade Percebida</th>
+                  </tr>
+                </thead>
+                <tbody id="obraHomeStatusBody"></tbody>
+              </table>
+            </div>
+            <div class="obra-home-status-legend">
+              <span><i class="legend-chip legend-green"></i> No prazo</span>
+              <span><i class="legend-chip legend-yellow"></i> No dia do prazo</span>
+              <span><i class="legend-chip legend-red"></i> Prazo vencido</span>
+              <span><strong>V</strong> = Fechada</span>
+              <span><strong>X</strong> = Pendente</span>
+            </div>
+          </section>
+
+          <div class="obra-home-sections">
+            <section class="obra-home-section">
+              <h3>Programação Semanal</h3>
+              <div class="obra-home-links">
+                <button type="button" class="obra-home-link" data-work-home-link="preprogramacao">Pré-Programação da Semana</button>
+                <button type="button" class="obra-home-link" data-work-home-link="reuniaoppc">Reunião de PPC</button>
+                <button type="button" class="obra-home-link" data-work-home-link="programacao">Programação da Semana</button>
+                <button type="button" class="obra-home-link" data-work-home-link="atividades">Atividades Previstas</button>
+              </div>
+            </section>
+
+            <section class="obra-home-section">
+              <h3>Feedback</h3>
+              <div class="obra-home-links">
+                <button type="button" class="obra-home-link" data-work-home-link="feedback">Feedback da Semana</button>
+                <button type="button" class="obra-home-link" data-work-home-link="qualidade">Qualidade Percebida</button>
+              </div>
+            </section>
+
+            <section class="obra-home-section">
+              <h3>Gestão e Dashboards</h3>
+              <div class="obra-home-links">
+                <button type="button" class="obra-home-link" data-work-home-link="gestao" data-work-home-dashboard="relatorio">Relatório da Semana</button>
+                <button type="button" class="obra-home-link" data-work-home-link="gestao" data-work-home-dashboard="historico">Histórico</button>
+              </div>
+            </section>
+
+            <section class="obra-home-section">
+              <h3>Cadastros da Obra</h3>
+              <div class="obra-home-links">
+                <button type="button" class="obra-home-link" data-work-home-link="cadastrosObra" data-work-home-obra="zoneamento">Zoneamento</button>
+                <button type="button" class="obra-home-link" data-work-home-link="cadastrosObra" data-work-home-obra="empreiteiros">Empreiteiros</button>
+                <button type="button" class="obra-home-link" data-work-home-link="cadastrosObra" data-work-home-obra="grupos">Grupos de Atividades da Obra</button>
+                <button type="button" class="obra-home-link" data-work-home-link="cadastrosObra" data-work-home-obra="feriados">Feriados</button>
+                <button type="button" class="obra-home-link" data-work-home-link="cadastrosObra" data-work-home-obra="prazos">Prazos</button>
+                <button type="button" class="obra-home-link" data-work-home-link="cadastrosObra" data-work-home-obra="qualidade">Qualidade Percebida</button>
+              </div>
+            </section>
+          </div>
+        </article>
+      </section>
+
       <section class="tab-panel" data-tab-panel="programacao">
         <article class="panel">
           <h2 id="planningControlTitle">Abertura e controle da semana</h2>
@@ -880,7 +971,7 @@
           </div>
         </article>
 
-        <article class="panel">
+        <article class="panel" id="planningWeatherPanel">
           <h2 id="planningWeatherTitle">Previsão do tempo</h2>
           <div id="weatherStrip" class="weather-strip"></div>
         </article>
