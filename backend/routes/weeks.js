@@ -262,6 +262,7 @@ function normalizeWeekday(value) {
 
 function normalizePlanningTaskStatusForCopy(value) {
   const status = normalizeTaskStatus(value);
+  if (status === TASK_STATUS.CANCELLED) return TASK_STATUS.CANCELLED;
   if (status === TASK_STATUS.RETRABALHO) return TASK_STATUS.RETRABALHO;
   if (status === TASK_STATUS.RESERVA) return TASK_STATUS.RESERVA;
   return TASK_STATUS.PLANNED;
@@ -2103,6 +2104,39 @@ router.post('/weeks/:weekId/feedback', authenticate, loadUser, requireWeekRoles(
   });
 }));
 
+router.post('/weeks/:weekId/feedback/reopen', authenticate, loadUser, requireWeekRoles([ROLES.ADMIN]), asyncHandler(async (req, res) => {
+  if (String(req.week.feedbackStatus || '').toUpperCase() !== WEEK_STATUS.CLOSED) {
+    return res.status(409).json({ error: 'feedback_not_closed' });
+  }
+  if (String(req.week.qualityStatus || '').toUpperCase() === WEEK_STATUS.CLOSED) {
+    return res.status(409).json({ error: 'feedback_reopen_requires_quality_open' });
+  }
+
+  await prisma.week.update({
+    where: { id: req.week.id },
+    data: {
+      feedbackStatus: WEEK_STATUS.OPEN,
+      feedbackClosedAt: null,
+      feedbackClosedById: null,
+    },
+  });
+
+  await writeAudit({
+    userId: req.user.id,
+    workId: req.workId,
+    entityType: 'WEEK',
+    entityId: req.week.id,
+    eventType: 'FEEDBACK_REOPENED',
+    description: `Feedback da semana ${req.week.weekNumber} reaberto.`,
+  });
+
+  const weekTasks = await prisma.task.findMany({ where: { currentWeekId: req.week.id } });
+  const weekFeedbacks = await prisma.feedback.findMany({ where: { weekId: req.week.id } });
+  return res.json({
+    summary: summarizeWeek(weekTasks, weekFeedbacks),
+  });
+}));
+
 router.get('/weeks/:weekId/perceived-quality', authenticate, loadUser, requireWeekRoles(Object.values(ROLES)), asyncHandler(async (req, res) => {
   const payload = await buildPerceivedQualityWeekPayload(req.week.id);
   if (!payload) return res.status(404).json({ error: 'week_not_found' });
@@ -2114,6 +2148,9 @@ router.put('/weeks/:weekId/perceived-quality', authenticate, loadUser, requireWe
   if (!payload) return res.status(404).json({ error: 'week_not_found' });
   if (String(payload.week.qualityStatus || '').toUpperCase() === WEEK_STATUS.CLOSED) {
     return res.status(409).json({ error: 'quality_closed' });
+  }
+  if (String(payload.week.feedbackStatus || '').toUpperCase() !== WEEK_STATUS.CLOSED) {
+    return res.status(409).json({ error: 'feedback_not_closed_for_quality' });
   }
 
   const items = Array.isArray(req.body.items) ? req.body.items : [];
@@ -2242,6 +2279,35 @@ router.post('/weeks/:weekId/perceived-quality/close', authenticate, loadUser, re
 
   const closedPayload = await buildPerceivedQualityWeekPayload(req.week.id);
   return res.json(closedPayload);
+}));
+
+router.post('/weeks/:weekId/perceived-quality/reopen', authenticate, loadUser, requireWeekRoles([ROLES.ADMIN]), asyncHandler(async (req, res) => {
+  const payload = await buildPerceivedQualityWeekPayload(req.week.id);
+  if (!payload) return res.status(404).json({ error: 'week_not_found' });
+  if (String(payload.week.qualityStatus || '').toUpperCase() !== WEEK_STATUS.CLOSED) {
+    return res.status(409).json({ error: 'quality_not_closed' });
+  }
+
+  await prisma.week.update({
+    where: { id: req.week.id },
+    data: {
+      qualityStatus: WEEK_STATUS.OPEN,
+      qualityClosedAt: null,
+      qualityClosedById: null,
+    },
+  });
+
+  await writeAudit({
+    userId: req.user.id,
+    workId: req.workId,
+    entityType: 'WEEK_PERCEIVED_QUALITY',
+    entityId: req.week.id,
+    eventType: 'PERCEIVED_QUALITY_REOPENED',
+    description: `Qualidade percebida da semana ${payload.week.weekNumber} reaberta.`,
+  });
+
+  const reopenedPayload = await buildPerceivedQualityWeekPayload(req.week.id);
+  return res.json(reopenedPayload);
 }));
 
 router.get('/weeks/:weekId/perceived-quality/export/pdf', authenticate, loadUser, requireWeekRoles(Object.values(ROLES)), asyncHandler(async (req, res) => {
@@ -2676,6 +2742,40 @@ router.post('/weeks/:weekId/ppc-meeting/close', authenticate, loadUser, requireW
     entityId: updated.id,
     eventType: 'PPC_MEETING_CLOSED',
     description: `Reunião de PPC da semana ${req.week.weekNumber} fechada.`,
+  });
+
+  const contractors = await listActiveContractorsByWeek(req.week.id, req.workId);
+  return res.json(serializePpcMeeting(updated, req.week, contractors));
+}));
+
+router.post('/weeks/:weekId/ppc-meeting/reopen', authenticate, loadUser, requireWeekRoles([ROLES.ADMIN]), asyncHandler(async (req, res) => {
+  const current = await prisma.weekPpcMeeting.findUnique({
+    where: { weekId: req.week.id },
+    include: { attendances: true, closedBy: { select: { name: true } } },
+  });
+  if (!current) return res.status(404).json({ error: 'ppc_meeting_not_found' });
+  if (!current.isClosed) return res.status(409).json({ error: 'ppc_meeting_not_closed' });
+  if (String(req.week.planningStatus || '').toUpperCase() === WEEK_STATUS.CLOSED) {
+    return res.status(409).json({ error: 'ppc_meeting_reopen_requires_planning_open' });
+  }
+
+  const updated = await prisma.weekPpcMeeting.update({
+    where: { id: current.id },
+    data: {
+      isClosed: false,
+      closedAt: null,
+      closedById: null,
+    },
+    include: { attendances: true, closedBy: { select: { name: true } } },
+  });
+
+  await writeAudit({
+    userId: req.user.id,
+    workId: req.workId,
+    entityType: 'WEEK_PPC_MEETING',
+    entityId: updated.id,
+    eventType: 'PPC_MEETING_REOPENED',
+    description: `Reunião de PPC da semana ${req.week.weekNumber} reaberta.`,
   });
 
   const contractors = await listActiveContractorsByWeek(req.week.id, req.workId);

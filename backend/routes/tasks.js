@@ -339,12 +339,24 @@ async function listActiveContractorsForWeek(weekId, workId) {
 
 function normalizePlanningTaskStatusInput(value) {
   const status = normalizeTaskStatus(value);
-  if (status === TASK_STATUS.CANCELLED || status === TASK_STATUS.EXECUTED || status === TASK_STATUS.IN_PROGRESS) {
+  if (status === TASK_STATUS.CANCELLED) return TASK_STATUS.CANCELLED;
+  if (status === TASK_STATUS.EXECUTED || status === TASK_STATUS.IN_PROGRESS) {
     return TASK_STATUS.PLANNED;
   }
   if (status === TASK_STATUS.RETRABALHO) return TASK_STATUS.RETRABALHO;
   if (status === TASK_STATUS.RESERVA) return TASK_STATUS.RESERVA;
   return TASK_STATUS.PLANNED;
+}
+
+function samePlanningDays(a = [], b = []) {
+  const left = (Array.isArray(a) ? a : [])
+    .map((item) => `${String(item?.weekday || '').toUpperCase()}|${String(item?.plannedDate || '')}`)
+    .sort();
+  const right = (Array.isArray(b) ? b : [])
+    .map((item) => `${String(item?.weekday || '').toUpperCase()}|${String(item?.plannedDate || '')}`)
+    .sort();
+  if (left.length !== right.length) return false;
+  return left.every((item, index) => item === right[index]);
 }
 
 function serializePreTask(item, weekId) {
@@ -447,6 +459,35 @@ router.post('/weeks/:weekId/tasks', authenticate, loadUser, requireWeekRoles([RO
     resolvedLocationId = await findOrCreateLocation(req.workId, locationLevel1, locationLevel2);
   }
 
+  const normalizedStatus = normalizePlanningTaskStatusInput(status);
+  const normalizedPlannedStart = parseDate(plannedStart);
+  const normalizedPlannedEnd = parseDate(plannedEnd);
+  const normalizedPlannedDays = Array.isArray(plannedDays)
+    ? plannedDays.filter((d) => d && d.weekday).map((d) => ({
+      weekday: String(d.weekday).toUpperCase(),
+      plannedDate: parseDate(d.plannedDate),
+    }))
+    : [];
+
+  const existingEquivalent = await prisma.task.findFirst({
+    where: {
+      currentWeekId: req.week.id,
+      sequenceNumber: parseIntId(sequenceNumber) || (maxSeq?.sequenceNumber || 0) + 1,
+      originWeekId: resolvedOriginWeekId,
+      contractorId: contractorId || null,
+      supervisor: supervisor || null,
+      locationId: resolvedLocationId,
+      description,
+      plannedStart: normalizedPlannedStart,
+      plannedEnd: normalizedPlannedEnd,
+      status: normalizedStatus,
+    },
+    include: { contractor: true, location: true, plannedDays: true },
+  });
+  if (existingEquivalent && samePlanningDays(existingEquivalent.plannedDays, normalizedPlannedDays)) {
+    return res.json(existingEquivalent);
+  }
+
   const item = await prisma.task.create({
     data: {
       sequenceNumber: parseIntId(sequenceNumber) || (maxSeq?.sequenceNumber || 0) + 1,
@@ -456,16 +497,11 @@ router.post('/weeks/:weekId/tasks', authenticate, loadUser, requireWeekRoles([RO
       supervisor: supervisor || null,
       locationId: resolvedLocationId,
       description,
-      plannedStart: parseDate(plannedStart),
-      plannedEnd: parseDate(plannedEnd),
-      status: normalizePlanningTaskStatusInput(status),
+      plannedStart: normalizedPlannedStart,
+      plannedEnd: normalizedPlannedEnd,
+      status: normalizedStatus,
       plannedDays: {
-        create: Array.isArray(plannedDays)
-          ? plannedDays.filter((d) => d && d.weekday).map((d) => ({
-            weekday: String(d.weekday).toUpperCase(),
-            plannedDate: parseDate(d.plannedDate),
-          }))
-          : [],
+        create: normalizedPlannedDays,
       },
     },
     include: { contractor: true, location: true, plannedDays: true },
@@ -602,6 +638,40 @@ router.post('/weeks/:weekId/pre-tasks', authenticate, loadUser, requireWeekRoles
     resolvedLocationId = await findOrCreateLocation(req.workId, locationLevel1, locationLevel2);
   }
 
+  const normalizedStatus = normalizePlanningTaskStatusInput(status);
+  const normalizedPlannedStart = parseDate(plannedStart);
+  const normalizedPlannedEnd = parseDate(plannedEnd);
+  const normalizedPlannedDays = Array.isArray(plannedDays)
+    ? plannedDays.filter((d) => d && d.weekday).map((d) => ({
+      weekday: String(d.weekday).toUpperCase(),
+      plannedDate: parseDate(d.plannedDate),
+    }))
+    : [];
+
+  const existingEquivalent = await prisma.preTask.findFirst({
+    where: {
+      weekId: req.week.id,
+      sequenceNumber: parseIntId(sequenceNumber) || (maxSeq?.sequenceNumber || 0) + 1,
+      originWeekId: resolvedOriginWeekId,
+      contractorId: contractorId || null,
+      supervisor: supervisor || null,
+      locationId: resolvedLocationId,
+      description,
+      plannedStart: normalizedPlannedStart,
+      plannedEnd: normalizedPlannedEnd,
+      status: normalizedStatus,
+    },
+    include: {
+      contractor: { include: { function: true } },
+      location: true,
+      originWeek: { select: { weekNumber: true } },
+      plannedDays: { orderBy: { weekday: 'asc' } },
+    },
+  });
+  if (existingEquivalent && samePlanningDays(existingEquivalent.plannedDays, normalizedPlannedDays)) {
+    return res.json(serializePreTask(existingEquivalent, req.week.id));
+  }
+
   const item = await prisma.preTask.create({
     data: {
       sequenceNumber: parseIntId(sequenceNumber) || (maxSeq?.sequenceNumber || 0) + 1,
@@ -611,16 +681,11 @@ router.post('/weeks/:weekId/pre-tasks', authenticate, loadUser, requireWeekRoles
       supervisor: supervisor || null,
       locationId: resolvedLocationId,
       description,
-      plannedStart: parseDate(plannedStart),
-      plannedEnd: parseDate(plannedEnd),
-      status: normalizePlanningTaskStatusInput(status),
+      plannedStart: normalizedPlannedStart,
+      plannedEnd: normalizedPlannedEnd,
+      status: normalizedStatus,
       plannedDays: {
-        create: Array.isArray(plannedDays)
-          ? plannedDays.filter((d) => d && d.weekday).map((d) => ({
-            weekday: String(d.weekday).toUpperCase(),
-            plannedDate: parseDate(d.plannedDate),
-          }))
-          : [],
+        create: normalizedPlannedDays,
       },
     },
     include: {
@@ -796,6 +861,54 @@ router.delete('/pre-tasks/:taskId', authenticate, loadUser, asyncHandler(async (
   await prisma.preTaskPlannedDay.deleteMany({ where: { preTaskId: req.preTask.id } });
   await prisma.preTask.delete({ where: { id: req.preTask.id } });
   return res.status(204).send();
+}));
+
+router.post('/pre-tasks/:taskId/cancel', authenticate, loadUser, asyncHandler(async (req, res, next) => {
+  const taskId = parseIntId(req.params.taskId);
+  if (!taskId) return res.status(400).json({ error: 'invalid_task_id' });
+  const preTask = await prisma.preTask.findUnique({
+    where: { id: taskId },
+    include: { week: { select: { id: true, workId: true, prePlanningStatus: true } } },
+  });
+  if (!preTask) return res.status(404).json({ error: 'task_not_found' });
+  req.preTask = preTask;
+  req.params.workId = String(preTask.week.workId);
+  return next();
+}), requireWorkRoles([ROLES.ADMIN, ROLES.ENGINEERING, ROLES.CONTROLLER], (req) => parseIntId(req.params.workId)), asyncHandler(async (req, res) => {
+  if (String(req.preTask.week.prePlanningStatus || '').toUpperCase() !== WEEK_STATUS.OPEN) {
+    return res.status(409).json({ error: 'pre_planning_closed' });
+  }
+  if (Number(req.preTask.originWeekId) === Number(req.preTask.weekId)) {
+    return res.status(409).json({ error: 'cannot_cancel_current_week_task' });
+  }
+  if (String(req.preTask.status || '').toUpperCase() === TASK_STATUS.RESERVA) {
+    return res.status(409).json({ error: 'cannot_cancel_reserve_task' });
+  }
+  if (String(req.preTask.status || '').toUpperCase() === TASK_STATUS.CANCELLED) {
+    return res.status(409).json({ error: 'task_already_cancelled' });
+  }
+
+  const canceled = await prisma.preTask.update({
+    where: { id: req.preTask.id },
+    data: { status: TASK_STATUS.CANCELLED },
+    include: {
+      contractor: { include: { function: true } },
+      location: true,
+      originWeek: { select: { weekNumber: true } },
+      plannedDays: { orderBy: { weekday: 'asc' } },
+    },
+  });
+
+  await writeAudit({
+    userId: req.user.id,
+    workId: req.preTask.week.workId,
+    entityType: 'PRE_TASK',
+    entityId: req.preTask.id,
+    eventType: 'PRE_TASK_CANCELLED',
+    description: `Tarefa pendente ${req.preTask.id} cancelada na pré-programação.`,
+  });
+
+  return res.json(serializePreTask(canceled, req.preTask.week.id));
 }));
 
 router.post('/weeks/:weekId/pre-tasks/sync-to-planning', authenticate, loadUser, requireWeekRoles([ROLES.ADMIN, ROLES.ENGINEERING, ROLES.CONTROLLER]), asyncHandler(async (req, res) => {
@@ -986,13 +1099,25 @@ router.post('/tasks/:taskId/cancel', authenticate, loadUser, asyncHandler(async 
   if (!taskId) return res.status(400).json({ error: 'invalid_task_id' });
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    include: { currentWeek: { select: { id: true, workId: true } } },
+    include: { currentWeek: { select: { id: true, workId: true, planningStatus: true, ppcMeeting: { select: { isClosed: true } } } } },
   });
   if (!task) return res.status(404).json({ error: 'task_not_found' });
   req.task = task;
   req.params.workId = String(task.currentWeek.workId);
   return next();
-}), requireWorkRoles([ROLES.ADMIN, ROLES.CONTROLLER], (req) => parseIntId(req.params.workId)), asyncHandler(async (req, res) => {
+}), requireWorkRoles([ROLES.ADMIN, ROLES.ENGINEERING, ROLES.CONTROLLER], (req) => parseIntId(req.params.workId)), asyncHandler(async (req, res) => {
+  if (String(req.task.currentWeek?.planningStatus || '').toUpperCase() !== WEEK_STATUS.OPEN) {
+    return res.status(409).json({ error: 'planning_closed' });
+  }
+  if (req.task.currentWeek?.ppcMeeting?.isClosed !== true) {
+    return res.status(409).json({ error: 'planning_requires_ppc_meeting_close' });
+  }
+  if (Number(req.task.originWeekId) === Number(req.task.currentWeekId)) {
+    return res.status(409).json({ error: 'cannot_cancel_current_week_task' });
+  }
+  if (String(req.task.status || '').toUpperCase() === TASK_STATUS.RESERVA) {
+    return res.status(409).json({ error: 'cannot_cancel_reserve_task' });
+  }
   if (req.task.status === TASK_STATUS.CANCELLED) return res.status(409).json({ error: 'task_already_cancelled' });
 
   const canceled = await prisma.task.update({

@@ -1083,6 +1083,16 @@
               </div>
             </article>
           </div>
+          <div id="planningSaveProgressModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="planningSaveProgressTitle">
+            <article class="planning-modal-card">
+              <h3 id="planningSaveProgressTitle">Salvando planilha da semana</h3>
+              <p id="planningSaveProgressMessage">Preparando salvamento...</p>
+              <div class="progress-track" aria-hidden="true">
+                <div id="planningSaveProgressBar" class="progress-fill"></div>
+              </div>
+              <p id="planningSaveProgressPercent" class="progress-caption">0%</p>
+            </article>
+          </div>
           <div class="table-wrap">
             <table class="plan-table">
               <thead>
@@ -1378,6 +1388,7 @@
           <div class="actions-row">
             <button id="ppcMeetingSavePostBtn" type="button">Salvar presença e ata</button>
             <button id="ppcMeetingCloseBtn" type="button" class="warn">Fechar lista de presença e ata</button>
+            <button id="ppcMeetingReopenBtn" type="button" class="secondary hidden">Reabrir reunião de PPC</button>
             <button id="ppcMeetingExportMinutesPdfBtn" type="button">Gerar PDF ata + presença</button>
             <button id="ppcMeetingSendMinutesEmailBtn" type="button" class="secondary">Enviar e-mail da ata para participantes</button>
           </div>
@@ -1786,6 +1797,7 @@
             <input id="closeFeedbackCycle" type="checkbox" class="hidden" />
           </form>
           <button id="closeFeedbackWeekBtn" type="button" class="danger feedback-close-btn">Fechar feedback da semana</button>
+          <button id="reopenFeedbackWeekBtn" type="button" class="secondary feedback-close-btn hidden">Reabrir feedback da semana</button>
           <div id="feedbackCloseConfirmModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="feedbackCloseConfirmTitle">
             <article class="planning-modal-card feedback-close-modal-card">
               <h3 id="feedbackCloseConfirmTitle">Fechar feedback da semana</h3>
@@ -2196,6 +2208,7 @@
           <div id="qualityDeadlineCountdown" class="deadline-countdown-box hidden"></div>
           <div id="qualityCompletionBox" class="summary-kpi-grid"></div>
           <button id="closeQualityWeekBtn" type="button" class="danger feedback-close-btn">Fechar qualidade percebida da semana</button>
+          <button id="reopenQualityWeekBtn" type="button" class="secondary feedback-close-btn hidden">Reabrir qualidade percebida da semana</button>
         </article>
         <article class="panel">
           <h3>Faixas de avaliação da obra</h3>

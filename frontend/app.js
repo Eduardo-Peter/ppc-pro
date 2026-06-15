@@ -63,6 +63,7 @@ const state = {
   isAdmin: false,
   appConfig: null,
   closeFeedbackPending: false,
+  weekSheetSaveInProgress: false,
   weatherMiniObserver: null,
   weatherStripVisible: true,
   weatherMiniPosition: null,
@@ -316,6 +317,30 @@ function openFeedbackCloseConfirmModal() {
   modal.classList.remove('hidden');
 }
 
+function updatePlanningSaveProgress(progress = 0, message = 'Salvando...') {
+  const bar = $('#planningSaveProgressBar');
+  const percentEl = $('#planningSaveProgressPercent');
+  const messageEl = $('#planningSaveProgressMessage');
+  const safeProgress = Math.max(0, Math.min(100, Number(progress) || 0));
+  if (bar) bar.style.width = `${safeProgress}%`;
+  if (percentEl) percentEl.textContent = `${Math.round(safeProgress)}%`;
+  if (messageEl) messageEl.textContent = message;
+}
+
+function openPlanningSaveProgressModal(progress = 0, message = 'Preparando salvamento...') {
+  const modal = $('#planningSaveProgressModal');
+  if (!modal) return;
+  updatePlanningSaveProgress(progress, message);
+  modal.classList.remove('hidden');
+}
+
+function closePlanningSaveProgressModal() {
+  const modal = $('#planningSaveProgressModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  updatePlanningSaveProgress(0, 'Preparando salvamento...');
+}
+
 function translateApiError(errorCodeOrMessage, fallbackPrefix = 'Erro') {
   const code = String(errorCodeOrMessage || '').trim();
   if (code === 'planning_closed') {
@@ -375,6 +400,9 @@ function translateApiError(errorCodeOrMessage, fallbackPrefix = 'Erro') {
   if (code === 'ppc_meeting_not_closed') {
     return 'Feche a reunião de PPC para gerar a ata final.';
   }
+  if (code === 'ppc_meeting_reopen_requires_planning_open') {
+    return 'A Reunião de PPC só pode ser reaberta quando a Programação da semana ainda estiver aberta.';
+  }
   if (code === 'ppc_meeting_requires_pre_planning_close') {
     return 'Você precisa fechar a pré-programação primeiro';
   }
@@ -393,6 +421,9 @@ function translateApiError(errorCodeOrMessage, fallbackPrefix = 'Erro') {
   if (code === 'feedback_closed') {
     return 'Feedback da semana já está fechado.';
   }
+  if (code === 'feedback_reopen_requires_quality_open') {
+    return 'O feedback só pode ser reaberto quando a Qualidade Percebida da mesma semana estiver aberta.';
+  }
   if (code === 'feedback_close_incomplete') {
     return 'Não é possível fechar o feedback da semana sem completar as causas obrigatórias.';
   }
@@ -410,6 +441,15 @@ function translateApiError(errorCodeOrMessage, fallbackPrefix = 'Erro') {
   }
   if (code === 'quality_item_invalid_contractor') {
     return 'Há itens de Qualidade Percebida com empreiteiro inválido para esta semana.';
+  }
+  if (code === 'cannot_cancel_current_week_task') {
+    return 'Apenas atividades herdadas de semanas anteriores podem ser canceladas nesta etapa.';
+  }
+  if (code === 'cannot_cancel_reserve_task') {
+    return 'Atividades em status Reserva não podem ser canceladas por esta ação.';
+  }
+  if (code === 'task_already_cancelled') {
+    return 'Esta atividade já está cancelada.';
   }
   if (code === 'quality_score_invalid') {
     return 'Nota inválida na Qualidade Percebida. Use números inteiros de 0 a 10.';
@@ -1942,11 +1982,13 @@ function taskEarliestPlannedDate(task) {
 function taskDisplayStatusCode(task, weekContext, isDraft = false) {
   const rawStatus = String(task?.status || 'PLANNED').toUpperCase();
   if (isDraft) {
+    if (rawStatus === 'CANCELLED') return 'CANCELADA';
     if (rawStatus === 'RETRABALHO') return 'RETRABALHO';
     if (rawStatus === 'RESERVA') return 'RESERVA';
     return 'PLANEJADA';
   }
   if (task?.isUnplanned) return 'NAO_PLANEJADA';
+  if (rawStatus === 'CANCELLED') return 'CANCELADA';
   if (Number(task?.originWeekId) !== Number(task?.currentWeekId)) return 'PENDENTE';
 
   const weekStart = dateFromKeyLocal(dateKeyLocal(weekContext?.startDate));
@@ -1961,6 +2003,7 @@ function taskDisplayStatusCode(task, weekContext, isDraft = false) {
 function planningStatusLabelFromCode(code) {
   const key = String(code || '').toUpperCase();
   if (key === 'PENDENTE') return 'Pendente';
+  if (key === 'CANCELADA') return 'Cancelada';
   if (key === 'NAO_PLANEJADA') return 'Não planejada';
   if (key === 'RETRABALHO') return 'Retrabalho';
   if (key === 'RESERVA') return 'Reserva';
@@ -4251,7 +4294,7 @@ function renderSheetTaskRow(task, canEdit, _canCancel, isDraft = false) {
     : (displayLocationLevel2(task.location) === '-' ? '' : (task.location?.level2 || ''));
   const originWeekNumber = task.originWeekNumber || taskOriginWeekNumber(task) || '';
   const originWeekDisplay = `<span class="sheet-origin-week">${escapeHtml(originWeekNumber)}</span>`;
-  const sequenceInput = `<input class="sheet-seq" type="number" min="1" value="${escapeHtml(task.sequenceNumber)}" ${disabled} />`;
+  const sequenceInput = `<span class="sheet-seq" data-sequence-value="${escapeHtml(task.sequenceNumber)}">${escapeHtml(task.sequenceNumber)}</span>`;
   const laborType = task.contractorLaborType || '';
   const selectedContractorId = task.contractorId || task.contractor?.id || '';
   const contractorSelect = `<select class="sheet-contractor" data-labor-type="${escapeHtml(laborType)}" ${disabled}>${contractorOptionsHtml(selectedContractorId, laborType)}</select>`;
@@ -4260,9 +4303,6 @@ function renderSheetTaskRow(task, canEdit, _canCancel, isDraft = false) {
   const location1Select = `<select class="sheet-location1 ${lockPendingFields ? 'sheet-locked-cell' : ''}" ${pendingLockDisabled}>${locationLevel1OptionsHtml(level1)}</select>`;
   const location2Select = `<select class="sheet-location2 ${lockPendingFields ? 'sheet-locked-cell' : ''}" ${pendingLockDisabled}>${locationLevel2OptionsHtml(level1, level2)}</select>`;
   const descriptionInput = `<textarea class="sheet-desc ${lockPendingFields ? 'sheet-locked-cell' : ''}" rows="2" ${pendingLockDisabled}>${escapeHtml(task.description || '')}</textarea>`;
-  const badgeVariant = isDraft ? 'new' : (status === 'PENDENTE' ? 'pending' : (storedStatus === 'RESERVA' ? 'reserve' : ''));
-  const badgeLabel = isDraft ? 'Rascunho' : (status === 'PENDENTE' ? 'Pendente' : (storedStatus === 'RESERVA' ? 'Reserva' : ''));
-  const originWeekExtra = badgeVariant ? `<div class="sheet-row-badge sheet-row-badge--${badgeVariant}">${escapeHtml(badgeLabel)}</div>` : '';
   const plannedStartValue = formatSheetDateMultiline(task.plannedStart);
   const plannedEndValue = formatSheetDateMultiline(task.plannedEnd);
   const plannedStartInput = `<textarea class="sheet-start" rows="2" placeholder="DD/MM/\nAAAA" ${disabled}>${escapeHtml(plannedStartValue)}</textarea>`;
@@ -4283,6 +4323,11 @@ function renderSheetTaskRow(task, canEdit, _canCancel, isDraft = false) {
     } else {
       const canDelete = Number(task.originWeekId) === Number(task.currentWeekId);
       if (canDelete) actions.push(`<button type="button" class="secondary" data-sheet-delete-task="${task.id}">Excluir</button>`);
+      const canCancelCarried = !canDelete && status === 'PENDENTE' && storedStatus !== 'RESERVA' && storedStatus !== 'CANCELLED';
+      if (canCancelCarried) {
+        const cancelAttr = isPrePlanningMode() ? 'data-sheet-cancel-pre-task' : 'data-sheet-cancel-task';
+        actions.push(`<button type="button" class="secondary" ${cancelAttr}="${task.id}">Cancelar</button>`);
+      }
     }
   }
   if (!actions.length) actions.push('-');
@@ -4290,7 +4335,7 @@ function renderSheetTaskRow(task, canEdit, _canCancel, isDraft = false) {
   return `
     <tr class="${rowClass}" data-sheet-row-kind="${isDraft ? 'draft' : 'task'}" data-sheet-editable="${editable ? '1' : '0'}" data-sheet-status-base="${escapeHtml(storedStatus)}" data-sheet-status-code="${escapeHtml(visualStatus)}" ${isDraft ? `data-draft-id="${escapeHtml(task.draftId)}"` : `data-task-id="${task.id}"`}>
       <td>${sequenceInput}</td>
-      <td>${originWeekDisplay}${originWeekExtra}</td>
+      <td>${originWeekDisplay}</td>
       <td><div class="sheet-contractor-cell">${contractorSelect}${contractorLaborLine}${supervisorInput}</div></td>
       <td>${location1Select}</td>
       <td>${location2Select}</td>
@@ -4499,6 +4544,7 @@ function renderPpcMeetingTab() {
   const savePreBtn = $('#ppcMeetingSavePreBtn');
   const savePostBtn = $('#ppcMeetingSavePostBtn');
   const closeBtn = $('#ppcMeetingCloseBtn');
+  const reopenBtn = $('#ppcMeetingReopenBtn');
   const exportPreMinutesBtn = $('#ppcMeetingPreExportMinutesPdfBtn');
   const exportMinutesBtn = $('#ppcMeetingExportMinutesPdfBtn');
   const sendMinutesBtn = $('#ppcMeetingSendMinutesEmailBtn');
@@ -4520,6 +4566,10 @@ function renderPpcMeetingTab() {
     if (savePreBtn) savePreBtn.disabled = true;
     if (savePostBtn) savePostBtn.disabled = true;
     if (closeBtn) closeBtn.disabled = true;
+    if (reopenBtn) {
+      reopenBtn.disabled = true;
+      reopenBtn.classList.add('hidden');
+    }
     if (exportPreMinutesBtn) exportPreMinutesBtn.disabled = true;
     if (exportMinutesBtn) exportMinutesBtn.disabled = true;
     if (sendMinutesBtn) sendMinutesBtn.disabled = true;
@@ -4542,6 +4592,12 @@ function renderPpcMeetingTab() {
   if (savePreBtn) savePreBtn.disabled = closed || !prePlanningClosed;
   if (savePostBtn) savePostBtn.disabled = closed || !prePlanningClosed;
   if (closeBtn) closeBtn.disabled = closed || !prePlanningClosed;
+  if (closeBtn) closeBtn.classList.toggle('hidden', closed || !hasAnyRole(EDIT_ROLES));
+  if (reopenBtn) {
+    const canReopen = hasAnyRole(ADMIN_ONLY_ROLES) && closed;
+    reopenBtn.classList.toggle('hidden', !canReopen);
+    reopenBtn.disabled = !canReopen;
+  }
   if (exportPreMinutesBtn) exportPreMinutesBtn.disabled = !prePlanningClosed;
   if (exportMinutesBtn) exportMinutesBtn.disabled = !closed;
   if (sendMinutesBtn) sendMinutesBtn.disabled = !closed;
@@ -5361,6 +5417,7 @@ function renderTasks() {
   const planningWeekSummary = $('#planningWeekSummary');
   const feedbackSummaryRow = $('#feedbackSummaryRow');
   const feedbackRulesBox = $('#feedbackRulesBox');
+  const reopenFeedbackBtn = $('#reopenFeedbackWeekBtn');
   closePlanningValidationModal();
   renderFeedbackWeekdayHeaders();
   body.innerHTML = '';
@@ -5383,10 +5440,17 @@ function renderTasks() {
   const canFeedbackEdit = hasAnyRole(EDIT_ROLES)
     && String(week?.planningStatus || '').toUpperCase() === 'CLOSED'
     && String(week?.feedbackStatus || '').toUpperCase() !== 'CLOSED';
+  const feedbackClosed = String(week?.feedbackStatus || '').toUpperCase() === 'CLOSED';
   const saveFeedbackBtn = $('#saveFeedbackInlineBtn');
   const closeFeedbackBtn = $('#closeFeedbackWeekBtn');
   if (saveFeedbackBtn) saveFeedbackBtn.disabled = !canFeedbackEdit;
   if (closeFeedbackBtn) closeFeedbackBtn.disabled = !canFeedbackEdit;
+  if (closeFeedbackBtn) closeFeedbackBtn.classList.toggle('hidden', feedbackClosed || !hasAnyRole(EDIT_ROLES));
+  if (reopenFeedbackBtn) {
+    const canReopen = hasAnyRole(ADMIN_ONLY_ROLES) && feedbackClosed;
+    reopenFeedbackBtn.classList.toggle('hidden', !canReopen);
+    reopenFeedbackBtn.disabled = !canReopen;
+  }
   if (!canFeedbackEdit) {
     state.closeFeedbackPending = false;
     closeFeedbackCloseConfirmModal();
@@ -5513,6 +5577,7 @@ function renderTasks() {
     const cancelled = statuses.filter((item) => item === 'CANCELLED').length;
     const unplanned = state.tasks.filter((task) => task.isUnplanned === true).length;
     feedbackSummaryRow.innerHTML = [
+      summaryKpiCardHtml('Situação', feedbackClosed ? 'Feedback fechado' : 'Feedback em andamento', feedbackClosed ? 'A semana já foi fechada e entrou no histórico.' : 'Você pode salvar parcialmente e fechar apenas ao concluir tudo.', feedbackClosed ? 'success' : 'info'),
       summaryKpiCardHtml('Executadas', String(executed), 'Fecham o pacote como concluído.', executed ? 'success' : 'info'),
       summaryKpiCardHtml('Iniciadas', String(started), 'Exigem causa e comentário para histórico.', started ? 'warning' : 'success'),
       summaryKpiCardHtml('Não iniciadas', String(notStarted), 'Também exigem causa e comentário.', notStarted ? 'danger' : 'success'),
@@ -5550,24 +5615,34 @@ function renderQualityPdfButton() {
 function renderQualityCompletionSummary(payload, canEdit) {
   const box = $('#qualityCompletionBox');
   if (!box) return;
+  const week = qualityWeekSelected();
   const rows = Array.isArray(payload?.rows) ? payload.rows : [];
   if (!rows.length) {
     box.innerHTML = summaryKpiCardHtml('Avaliação', 'Sem dados', 'Selecione uma semana com empreiteiros ativos.', 'info');
     return;
   }
   const completed = rows.filter((row) => (
-    Number.isInteger(Number(row.qualityScore))
-    && Number.isInteger(Number(row.collaborationTeamScore))
-    && Number.isInteger(Number(row.safetyScore))
-    && Number.isInteger(Number(row.cleaningScore))
+    row.qualityScore !== null && row.qualityScore !== ''
+    && row.collaborationTeamScore !== null && row.collaborationTeamScore !== ''
+    && row.safetyScore !== null && row.safetyScore !== ''
+    && row.cleaningScore !== null && row.cleaningScore !== ''
   )).length;
   const total = rows.length;
   const pending = Math.max(0, total - completed);
   const allFilled = pending === 0;
+  const isClosed = String(week?.qualityStatus || '').toUpperCase() === 'CLOSED';
+  const feedbackClosed = String(week?.feedbackStatus || '').toUpperCase() === 'CLOSED';
+  const situationValue = isClosed
+    ? 'Avaliação fechada'
+    : (!feedbackClosed ? 'Aguardando feedback' : (allFilled ? 'Pronta para fechar' : 'Em preenchimento'));
+  const situationHint = isClosed
+    ? 'A semana já foi fechada e entrou no histórico.'
+    : (!feedbackClosed ? 'Feche o feedback da semana para liberar esta avaliação.' : (canEdit ? 'Você ainda pode salvar ajustes antes do fechamento.' : 'A avaliação está indisponível para edição.'));
+  const situationTone = isClosed ? 'success' : (!feedbackClosed ? 'warning' : (allFilled ? 'success' : 'info'));
   box.innerHTML = [
     summaryKpiCardHtml('Empreiteiros avaliados', `${completed}/${total}`, allFilled ? 'Todos os itens obrigatórios foram preenchidos.' : 'Ainda faltam avaliações para fechar a semana.', allFilled ? 'success' : 'warning'),
     summaryKpiCardHtml('Pendentes', String(pending), pending ? 'Enquanto houver pendência, o fechamento fica bloqueado.' : 'Semana pronta para fechamento.', pending ? 'danger' : 'success'),
-    summaryKpiCardHtml('Situação', allFilled ? 'Pronta para fechar' : 'Em preenchimento', canEdit ? 'Você ainda pode salvar ajustes antes do fechamento.' : 'A semana já está fechada para edição.', allFilled ? 'success' : 'info'),
+    summaryKpiCardHtml('Situação', situationValue, situationHint, situationTone),
   ].join('');
 }
 
@@ -5604,6 +5679,7 @@ function renderQualityReferenceBox() {
 function canEditQualityWeek(week = qualityWeekSelected()) {
   if (!hasAnyRole(EDIT_ROLES)) return false;
   if (!week) return false;
+  if (String(week.feedbackStatus || '').toUpperCase() !== 'CLOSED') return false;
   return String(week.qualityStatus || '').toUpperCase() !== 'CLOSED';
 }
 
@@ -5611,14 +5687,22 @@ function renderQualityTable(payload) {
   const body = $('#qualityBody');
   const saveBtn = $('#saveQualityBtn');
   const closeBtn = $('#closeQualityWeekBtn');
+  const reopenBtn = $('#reopenQualityWeekBtn');
   if (!body) return;
 
   body.innerHTML = '';
 
   const week = qualityWeekSelected();
   const canEdit = canEditQualityWeek(week);
+  const isClosed = String(week?.qualityStatus || '').toUpperCase() === 'CLOSED';
   if (saveBtn) saveBtn.disabled = !canEdit;
   if (closeBtn) closeBtn.disabled = !canEdit;
+  if (closeBtn) closeBtn.classList.toggle('hidden', isClosed || !hasAnyRole(EDIT_ROLES));
+  if (reopenBtn) {
+    const canReopen = hasAnyRole(ADMIN_ONLY_ROLES) && isClosed;
+    reopenBtn.classList.toggle('hidden', !canReopen);
+    reopenBtn.disabled = !canReopen;
+  }
   renderQualityPdfButton();
   renderQualityReferenceBox();
 
@@ -5854,6 +5938,19 @@ async function handleQualityClose() {
       [translateApiError(error.message, 'Falha no fechamento')],
     );
     setStatus(translateApiError(error.message, 'Erro ao fechar Qualidade Percebida'), true);
+  }
+}
+
+async function handleQualityReopen() {
+  const week = qualityWeekSelected();
+  if (!week?.id) return;
+  try {
+    await api(`/weeks/${week.id}/perceived-quality/reopen`, { method: 'POST' });
+    await loadWeeks();
+    await refreshQualityTab({ useDefaultCurrent: false, silent: true });
+    setStatus(`Qualidade percebida da semana ${week.weekNumber} reaberta com sucesso.`);
+  } catch (error) {
+    setStatus(translateApiError(error.message, 'Erro ao reabrir Qualidade Percebida'), true);
   }
 }
 
@@ -6577,9 +6674,11 @@ function applyUiPermissions() {
   $('#feedbackForm').classList.toggle('hidden', !canEdit);
   $('#saveFeedbackInlineBtn').classList.toggle('hidden', !canEdit);
   $('#closeFeedbackWeekBtn').classList.toggle('hidden', !canEdit);
+  if ($('#reopenFeedbackWeekBtn')) $('#reopenFeedbackWeekBtn').classList.toggle('hidden', !hasAnyRole(ADMIN_ONLY_ROLES));
   $('#feedbackNewTaskForm').classList.toggle('hidden', !canEdit);
   $('#saveQualityBtn').classList.toggle('hidden', !canEdit);
   $('#closeQualityWeekBtn').classList.toggle('hidden', !canEdit);
+  if ($('#reopenQualityWeekBtn')) $('#reopenQualityWeekBtn').classList.toggle('hidden', !hasAnyRole(ADMIN_ONLY_ROLES));
 
   $('#openWeekBtn').disabled = !canEdit;
   $('#weekRefreshBtn').disabled = !canEdit;
@@ -6599,14 +6698,17 @@ function applyUiPermissions() {
   $('#importGroupBtn').disabled = !canEdit;
   $('#saveFeedbackInlineBtn').disabled = !canEdit;
   $('#closeFeedbackWeekBtn').disabled = !canEdit;
+  if ($('#reopenFeedbackWeekBtn')) $('#reopenFeedbackWeekBtn').disabled = !hasAnyRole(ADMIN_ONLY_ROLES);
   if ($('#feedbackBulkExecutedBtn')) $('#feedbackBulkExecutedBtn').disabled = !canEdit;
   if ($('#feedbackBulkStartedBtn')) $('#feedbackBulkStartedBtn').disabled = !canEdit;
   if ($('#feedbackBulkNotStartedBtn')) $('#feedbackBulkNotStartedBtn').disabled = !canEdit;
   $('#saveQualityBtn').disabled = !canEdit;
   $('#closeQualityWeekBtn').disabled = !canEdit;
+  if ($('#reopenQualityWeekBtn')) $('#reopenQualityWeekBtn').disabled = !hasAnyRole(ADMIN_ONLY_ROLES);
   if ($('#ppcMeetingSavePreBtn')) $('#ppcMeetingSavePreBtn').disabled = !canEdit;
   if ($('#ppcMeetingSavePostBtn')) $('#ppcMeetingSavePostBtn').disabled = !canEdit;
   if ($('#ppcMeetingCloseBtn')) $('#ppcMeetingCloseBtn').disabled = !canEdit;
+  if ($('#ppcMeetingReopenBtn')) $('#ppcMeetingReopenBtn').disabled = !hasAnyRole(ADMIN_ONLY_ROLES);
   if ($('#ppcMeetingPreSendAllEmailBtn')) $('#ppcMeetingPreSendAllEmailBtn').disabled = !canEdit;
   if ($('#ppcMeetingSendMinutesEmailBtn')) $('#ppcMeetingSendMinutesEmailBtn').disabled = !canEdit;
   $('#dashboardWeekNumber').disabled = !canDashboard;
@@ -9411,6 +9513,19 @@ async function handlePpcMeetingClose() {
   }
 }
 
+async function handlePpcMeetingReopen() {
+  const week = ppcMeetingWeekSelected();
+  if (!week?.id) return;
+  try {
+    await api(`/weeks/${week.id}/ppc-meeting/reopen`, { method: 'POST' });
+    await loadWeeks();
+    await refreshPpcMeetingTab({ useDefaultNext: false, silent: true });
+    setStatus(`Reunião de PPC da semana ${week.weekNumber} reaberta com sucesso.`);
+  } catch (error) {
+    setStatus(translateApiError(error.message, 'Erro ao reabrir reunião de PPC'), true);
+  }
+}
+
 async function handlePpcMeetingMinutesPdfExport() {
   try {
     const week = ppcMeetingWeekSelected();
@@ -10021,6 +10136,21 @@ async function handleFeedback(event) {
   }
 }
 
+async function handleFeedbackReopen() {
+  const week = feedbackWeekSelected();
+  if (!week?.id) return;
+  try {
+    await api(`/weeks/${week.id}/feedback/reopen`, { method: 'POST' });
+    await loadWeeks();
+    await refreshFeedbackTab({ useDefaultPrevious: false, silent: true });
+    setStatus(`Feedback da semana ${week.weekNumber} reaberto com sucesso.`);
+  } catch (error) {
+    const message = translateApiError(error.message, 'Erro ao reabrir feedback');
+    openFeedbackValidationModal(message, []);
+    setStatus(message, true);
+  }
+}
+
 async function runWeekAction(action) {
   try {
     const targetWeek = await syncSelectedWeekFromWeekFieldIfNeeded();
@@ -10432,7 +10562,7 @@ function getSheetRowPayload(row, options = {}) {
   if (plannedEnd && !parseBrDate(plannedEnd)) throw new Error('Data de fim inválida (use DD/MM/AAAA).');
 
   const contractorId = Number.parseInt(row.querySelector('.sheet-contractor')?.value || '', 10);
-  const sequenceNumber = Number.parseInt(row.querySelector('.sheet-seq')?.value || '', 10);
+  const sequenceNumber = Number.parseInt(row.querySelector('.sheet-seq')?.dataset.sequenceValue || row.querySelector('.sheet-seq')?.textContent || '', 10);
   const originWeekNumber = Number.parseInt((row.querySelector('.sheet-origin-week')?.textContent || '').trim(), 10);
 
   const payload = {
@@ -10471,9 +10601,25 @@ function sheetMissingRequiredFields(payload) {
 
 function sheetRowLineLabel(row, index) {
   const uiLine = index + 1;
-  const sequence = row.querySelector('.sheet-seq')?.value.trim() || '';
+  const sequence = String(row.querySelector('.sheet-seq')?.dataset.sequenceValue || row.querySelector('.sheet-seq')?.textContent || '').trim();
   if (!sequence) return `Linha ${uiLine}`;
   return `Linha ${uiLine} (#${sequence})`;
+}
+
+function sheetDuplicateActivityIssues(operations = []) {
+  const groups = new Map();
+  operations.forEach((item) => {
+    const payload = item?.payload || {};
+    const description = normalizeSearchText(payload.description || '');
+    const contractorId = Number(payload.contractorId) || 0;
+    const location1 = normalizeSearchText(payload.locationLevel1 || '');
+    if (!description || !contractorId || !location1) return;
+    const key = `${contractorId}__${location1}__${description}`;
+    const bucket = groups.get(key) || [];
+    bucket.push(item.label);
+    groups.set(key, bucket);
+  });
+  return [...groups.values()].filter((labels) => labels.length > 1);
 }
 
 function syncDraftStateFromRow(row) {
@@ -10482,7 +10628,7 @@ function syncDraftStateFromRow(row) {
   const index = state.sheetDraftRows.findIndex((item) => item.draftId === draftId);
   if (index < 0) return;
   const draft = state.sheetDraftRows[index];
-  draft.sequenceNumber = Number.parseInt(row.querySelector('.sheet-seq')?.value || '', 10) || draft.sequenceNumber;
+  draft.sequenceNumber = Number.parseInt(row.querySelector('.sheet-seq')?.dataset.sequenceValue || row.querySelector('.sheet-seq')?.textContent || '', 10) || draft.sequenceNumber;
   draft.contractorId = Number.parseInt(row.querySelector('.sheet-contractor')?.value || '', 10) || null;
   draft.supervisor = row.querySelector('.sheet-supervisor')?.value || '';
   draft.locationLevel1 = row.querySelector('.sheet-location1')?.value || '';
@@ -10495,8 +10641,13 @@ function syncDraftStateFromRow(row) {
 }
 
 async function handleSaveWeekSheet() {
+  if (state.weekSheetSaveInProgress) return;
   try {
+    state.weekSheetSaveInProgress = true;
     const preMode = isPrePlanningMode();
+    const saveBtn = $('#saveWeekSheetBtn');
+    if (saveBtn) saveBtn.disabled = true;
+    openPlanningSaveProgressModal(3, 'Validando planilha...');
     const targetWeek = await syncSelectedWeekFromWeekFieldIfNeeded();
     if (!targetWeek?.id) {
       setStatus('Selecione uma semana para salvar a programação.', true);
@@ -10584,6 +10735,15 @@ async function handleSaveWeekSheet() {
       return;
     }
 
+    const duplicateIssues = sheetDuplicateActivityIssues(operations);
+    if (duplicateIssues.length) {
+      const lines = duplicateIssues.map((labels, index) => `Duplicidade ${index + 1}: ${labels.join(', ')}`);
+      const message = 'Não foi possível salvar a programação semanal. Existem atividades duplicadas para o mesmo empreiteiro, mesmo Local 1 e mesma descrição.';
+      openPlanningValidationModal(message, lines, { title: 'Atividades duplicadas' });
+      setStatus('Salvamento bloqueado: existem atividades duplicadas na planilha.', true);
+      return;
+    }
+
     const holidayWarnings = operations
       .map((item) => ({
         label: item.label,
@@ -10605,10 +10765,17 @@ async function handleSaveWeekSheet() {
     }
 
     closePlanningValidationModal();
+    updatePlanningSaveProgress(10, 'Iniciando salvamento...');
     let createdCount = 0;
     let updatedCount = 0;
+    const totalOperations = operations.length || 1;
 
-    for (const item of operations) {
+    for (let index = 0; index < operations.length; index += 1) {
+      const item = operations[index];
+      updatePlanningSaveProgress(
+        10 + Math.round((index / totalOperations) * 80),
+        `${item.label}: salvando ${index + 1} de ${totalOperations}...`,
+      );
       if (item.kind === 'draft') {
         await api(planningTaskCollectionPath(targetWeek.id), {
           method: 'POST',
@@ -10625,7 +10792,9 @@ async function handleSaveWeekSheet() {
       updatedCount += 1;
     }
 
+    updatePlanningSaveProgress(94, 'Recarregando dados da semana...');
     await loadTasksAndDashboard();
+    updatePlanningSaveProgress(100, 'Salvamento concluído.');
     const successMessage = `${preMode ? 'Pré-programação semanal' : 'Programação semanal'} salva. ${createdCount} linha(s) criada(s) e ${updatedCount} linha(s) atualizada(s).`;
     setStatus(successMessage);
     openPlanningValidationModal(
@@ -10641,6 +10810,21 @@ async function handleSaveWeekSheet() {
       [],
       { title: 'Falha no Salvamento' },
     );
+  } finally {
+    window.setTimeout(() => {
+      closePlanningSaveProgressModal();
+    }, 250);
+    state.weekSheetSaveInProgress = false;
+    const saveBtn = $('#saveWeekSheetBtn');
+    if (saveBtn) {
+      const week = activeWeek();
+      const statusField = planningModeStatusField();
+      const weekOpen = String(week?.[statusField] || '').toUpperCase() === 'OPEN';
+      const canEdit = hasAnyRole(EDIT_ROLES)
+        && weekOpen
+        && (isPrePlanningMode() || String(week?.ppcMeeting?.isClosed || '').toLowerCase() === 'true');
+      saveBtn.disabled = !canEdit;
+    }
   }
 }
 
@@ -10709,6 +10893,34 @@ async function handleImportGroupToWeek() {
 }
 
 async function handleTaskAction(event) {
+  const cancelTaskBtn = event.target.closest('button[data-sheet-cancel-task]');
+  if (cancelTaskBtn) {
+    const taskId = Number(cancelTaskBtn.dataset.sheetCancelTask);
+    if (!taskId) return;
+    try {
+      await api(`/tasks/${taskId}/cancel`, { method: 'POST' });
+      await loadTasksAndDashboard();
+      setStatus(`Atividade #${taskId} cancelada com sucesso.`);
+    } catch (error) {
+      setStatus(translateApiError(error.message, 'Erro ao cancelar atividade'), true);
+    }
+    return;
+  }
+
+  const cancelPreTaskBtn = event.target.closest('button[data-sheet-cancel-pre-task]');
+  if (cancelPreTaskBtn) {
+    const taskId = Number(cancelPreTaskBtn.dataset.sheetCancelPreTask);
+    if (!taskId) return;
+    try {
+      await api(`/pre-tasks/${taskId}/cancel`, { method: 'POST' });
+      await loadTasksAndDashboard();
+      setStatus(`Atividade pendente #${taskId} cancelada com sucesso.`);
+    } catch (error) {
+      setStatus(translateApiError(error.message, 'Erro ao cancelar atividade pendente'), true);
+    }
+    return;
+  }
+
   const deleteTaskBtn = event.target.closest('button[data-sheet-delete-task]');
   if (deleteTaskBtn) {
     const taskId = Number(deleteTaskBtn.dataset.sheetDeleteTask);
@@ -10851,6 +11063,11 @@ function bindEvents() {
   $('#closeQualityWeekBtn').addEventListener('click', () => {
     handleQualityClose().catch((error) => setStatus(`Erro ao fechar qualidade percebida: ${error.message}`, true));
   });
+  if ($('#reopenQualityWeekBtn')) {
+    $('#reopenQualityWeekBtn').addEventListener('click', () => {
+      handleQualityReopen().catch((error) => setStatus(`Erro ao reabrir qualidade percebida: ${error.message}`, true));
+    });
+  }
   $('#qualityWeekPdfBtn').addEventListener('click', () => {
     handleQualityPdfExport().catch((error) => setStatus(`Erro ao gerar PDF da qualidade percebida: ${error.message}`, true));
   });
@@ -10921,6 +11138,11 @@ function bindEvents() {
   $('#ppcMeetingCloseBtn').addEventListener('click', () => {
     handlePpcMeetingClose().catch((error) => setStatus(`Erro ao fechar reunião de PPC: ${error.message}`, true));
   });
+  if ($('#ppcMeetingReopenBtn')) {
+    $('#ppcMeetingReopenBtn').addEventListener('click', () => {
+      handlePpcMeetingReopen().catch((error) => setStatus(`Erro ao reabrir reunião de PPC: ${error.message}`, true));
+    });
+  }
   $('#ppcMeetingExportMinutesPdfBtn').addEventListener('click', () => {
     handlePpcMeetingMinutesPdfExport().catch((error) => setStatus(`Erro ao gerar PDF da ata/lista de presença: ${error.message}`, true));
   });
@@ -11144,6 +11366,11 @@ function bindEvents() {
     if ($('#closeFeedbackWeekBtn').disabled) return;
     openFeedbackCloseConfirmModal();
   });
+  if ($('#reopenFeedbackWeekBtn')) {
+    $('#reopenFeedbackWeekBtn').addEventListener('click', () => {
+      handleFeedbackReopen().catch((error) => setStatus(`Erro ao reabrir feedback: ${error.message}`, true));
+    });
+  }
   $('#feedbackCloseConfirmNoBtn').addEventListener('click', () => {
     state.closeFeedbackPending = false;
     closeFeedbackCloseConfirmModal();
