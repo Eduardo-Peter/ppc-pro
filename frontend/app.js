@@ -4323,10 +4323,12 @@ function renderSheetTaskRow(task, canEdit, _canCancel, isDraft = false) {
     } else {
       const canDelete = Number(task.originWeekId) === Number(task.currentWeekId);
       if (canDelete) actions.push(`<button type="button" class="secondary" data-sheet-delete-task="${task.id}">Excluir</button>`);
-      const canCancelCarried = !canDelete && status === 'PENDENTE' && storedStatus !== 'RESERVA' && storedStatus !== 'CANCELLED';
+      const canCancelCarried = isPrePlanningMode()
+        ? (!canDelete && storedStatus !== 'CANCELLED')
+        : (!canDelete && status === 'PENDENTE' && storedStatus !== 'RESERVA' && storedStatus !== 'CANCELLED');
       if (canCancelCarried) {
         const cancelAttr = isPrePlanningMode() ? 'data-sheet-cancel-pre-task' : 'data-sheet-cancel-task';
-        actions.push(`<button type="button" class="secondary" ${cancelAttr}="${task.id}">Cancelar</button>`);
+        actions.push(`<button type="button" class="secondary" ${cancelAttr}="${task.id}">Excluir</button>`);
       }
     }
   }

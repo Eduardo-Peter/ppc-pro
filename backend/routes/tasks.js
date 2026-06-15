@@ -569,7 +569,10 @@ router.post('/weeks/:weekId/tasks/from-group', authenticate, loadUser, requireWe
 }));
 
 router.get('/weeks/:weekId/pre-tasks', authenticate, loadUser, requireWeekRoles(Object.values(ROLES)), asyncHandler(async (req, res) => {
-  const where = { weekId: req.week.id };
+  const where = {
+    weekId: req.week.id,
+    status: { not: TASK_STATUS.CANCELLED },
+  };
 
   if (req.workRoles.has(ROLES.CONTRACTOR) && ![...req.workRoles].some((r) => PRIVILEGED.has(r))) {
     if (!req.user.contractorId) return res.json([]);
@@ -881,9 +884,6 @@ router.post('/pre-tasks/:taskId/cancel', authenticate, loadUser, asyncHandler(as
   if (Number(req.preTask.originWeekId) === Number(req.preTask.weekId)) {
     return res.status(409).json({ error: 'cannot_cancel_current_week_task' });
   }
-  if (String(req.preTask.status || '').toUpperCase() === TASK_STATUS.RESERVA) {
-    return res.status(409).json({ error: 'cannot_cancel_reserve_task' });
-  }
   if (String(req.preTask.status || '').toUpperCase() === TASK_STATUS.CANCELLED) {
     return res.status(409).json({ error: 'task_already_cancelled' });
   }
@@ -905,7 +905,7 @@ router.post('/pre-tasks/:taskId/cancel', authenticate, loadUser, asyncHandler(as
     entityType: 'PRE_TASK',
     entityId: req.preTask.id,
     eventType: 'PRE_TASK_CANCELLED',
-    description: `Tarefa pendente ${req.preTask.id} cancelada na pré-programação.`,
+    description: `Tarefa herdada ${req.preTask.id} marcada como excluída na pré-programação, com histórico preservado.`,
   });
 
   return res.json(serializePreTask(canceled, req.preTask.week.id));
@@ -921,7 +921,7 @@ router.post('/weeks/:weekId/pre-tasks/sync-to-planning', authenticate, loadUser,
   const [planningCount, preTasks] = await Promise.all([
     prisma.task.count({ where: { currentWeekId: req.week.id } }),
     prisma.preTask.findMany({
-      where: { weekId: req.week.id },
+      where: { weekId: req.week.id, status: { not: TASK_STATUS.CANCELLED } },
       include: { plannedDays: { orderBy: { weekday: 'asc' } } },
       orderBy: { sequenceNumber: 'asc' },
     }),

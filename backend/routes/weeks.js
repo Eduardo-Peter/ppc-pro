@@ -412,6 +412,7 @@ async function countPrePlanningTasksWithoutLocationLevel1(weekId) {
   const rows = await prisma.preTask.findMany({
     where: {
       weekId,
+      status: { not: TASK_STATUS.CANCELLED },
     },
     select: {
       locationId: true,
@@ -1484,7 +1485,7 @@ router.post('/weeks/:weekId/close-pre-planning', authenticate, loadUser, require
   }
 
   const preTasks = await prisma.preTask.findMany({
-    where: { weekId: req.week.id },
+    where: { weekId: req.week.id, status: { not: TASK_STATUS.CANCELLED } },
     include: { plannedDays: { orderBy: { weekday: 'asc' } } },
     orderBy: { sequenceNumber: 'asc' },
   });
