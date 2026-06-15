@@ -298,6 +298,24 @@ async function ensureWeekExistsForWork(workId, workStartDate, weekNumber) {
   }
 }
 
+async function ensureFutureWeeksForWork(workId, workStartDate, baseWeekNumber, totalWeeksAhead = 4) {
+  const createdWeekNumbers = [];
+  const ensuredWeeks = [];
+  for (let offset = 1; offset <= totalWeeksAhead; offset += 1) {
+    const targetWeekNumber = Number(baseWeekNumber) + offset;
+    // eslint-disable-next-line no-await-in-loop
+    const existing = await prisma.week.findUnique({
+      where: { workId_weekNumber: { workId, weekNumber: targetWeekNumber } },
+      select: { id: true, weekNumber: true },
+    });
+    // eslint-disable-next-line no-await-in-loop
+    const week = await ensureWeekExistsForWork(workId, workStartDate, targetWeekNumber);
+    if (week && !existing) createdWeekNumbers.push(targetWeekNumber);
+    if (week) ensuredWeeks.push(week);
+  }
+  return { createdWeekNumbers, ensuredWeeks };
+}
+
 async function rollPendingTasksToNextWeek(sourceWeek, nextWeek) {
   if (!sourceWeek?.id || !nextWeek?.id) return { rolledCount: 0, rolledTaskIds: [] };
 
@@ -2037,6 +2055,7 @@ router.post('/weeks/:weekId/feedback', authenticate, loadUser, requireWeekRoles(
   }
 
   let rolloverResult = null;
+  let futureWeeksResult = { createdWeekNumbers: [], ensuredWeeks: [] };
   if (closeWeek) {
     await prisma.week.update({
       where: { id: req.week.id },
@@ -2052,16 +2071,36 @@ router.post('/weeks/:weekId/feedback', authenticate, loadUser, requireWeekRoles(
       select: { id: true, startDate: true },
     });
     if (work?.startDate) {
-      const nextWeek = await ensureWeekExistsForWork(req.workId, work.startDate, Number(req.week.weekNumber) + 1);
+      futureWeeksResult = await ensureFutureWeeksForWork(req.workId, work.startDate, Number(req.week.weekNumber), 4);
+      const nextWeek = futureWeeksResult.ensuredWeeks.find((item) => Number(item.weekNumber) === Number(req.week.weekNumber) + 1)
+        || await ensureWeekExistsForWork(req.workId, work.startDate, Number(req.week.weekNumber) + 1);
       if (nextWeek) {
         rolloverResult = await rollPendingTasksToNextWeek(req.week, nextWeek);
       }
     }
+
+    await writeAudit({
+      userId: req.user.id,
+      workId: req.workId,
+      entityType: 'WEEK',
+      entityId: req.week.id,
+      eventType: 'FUTURE_WEEKS_PREPARED',
+      description: futureWeeksResult.createdWeekNumbers.length
+        ? `Fechamento do feedback da semana ${req.week.weekNumber} disponibilizou automaticamente as semanas ${futureWeeksResult.createdWeekNumbers.join(', ')} para pré-programação.`
+        : `Fechamento do feedback da semana ${req.week.weekNumber} confirmou a disponibilidade das próximas 4 semanas para pré-programação.`,
+    });
   }
 
   const weekTasks = await prisma.task.findMany({ where: { currentWeekId: req.week.id } });
   const weekFeedbacks = await prisma.feedback.findMany({ where: { weekId: req.week.id } });
-  return res.json({ summary: summarizeWeek(weekTasks, weekFeedbacks), rollover: rolloverResult });
+  return res.json({
+    summary: summarizeWeek(weekTasks, weekFeedbacks),
+    rollover: rolloverResult,
+    futureWeeks: {
+      ensured: futureWeeksResult.ensuredWeeks.map((item) => Number(item.weekNumber)),
+      created: futureWeeksResult.createdWeekNumbers,
+    },
+  });
 }));
 
 router.get('/weeks/:weekId/perceived-quality', authenticate, loadUser, requireWeekRoles(Object.values(ROLES)), asyncHandler(async (req, res) => {

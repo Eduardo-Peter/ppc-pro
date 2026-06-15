@@ -249,6 +249,13 @@ body.side-nav-expanded .side-nav-content {
   font-weight: 700;
 }
 
+.side-nav-description {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
 .side-nav-item {
   width: 100%;
   text-align: left;
@@ -593,6 +600,37 @@ body.side-nav-expanded .side-nav-content {
   gap: 8px;
 }
 
+.obra-home-links--vertical {
+  grid-template-columns: 1fr;
+}
+
+.obra-home-action-cards {
+  display: grid;
+  gap: 10px;
+}
+
+.obra-home-action-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid #d4e3ee;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.obra-home-action-card strong {
+  color: #15384a;
+  font-size: 0.95rem;
+}
+
+.obra-home-action-card p,
+.obra-home-action-meta {
+  margin: 0;
+  color: #5a7281;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .obra-home-link {
   text-align: left;
   border: 1px solid #d4e3ee;
@@ -633,6 +671,280 @@ body.side-nav-expanded .side-nav-content {
   background: linear-gradient(90deg, #d9f6e8, #c8ecd9);
   border-color: #a4d8be;
   color: #0f4d3c;
+}
+
+.panel-intro-text {
+  margin: 2px 0 0;
+  color: #5d7482;
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.flow-intro-card {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid #dbe7ee;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f9fcff 0%, #f2f8fc 100%);
+}
+
+.flow-intro-card strong {
+  color: #19455a;
+  font-size: 0.92rem;
+}
+
+.summary-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.summary-kpi {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #d6e4ec;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbfd 100%);
+  text-align: center;
+}
+
+.summary-kpi label {
+  display: block;
+  color: #5b7482;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summary-kpi strong {
+  color: #133748;
+  font-size: 1.2rem;
+}
+
+.summary-kpi small {
+  color: #64808e;
+  font-size: 0.77rem;
+  line-height: 1.45;
+}
+
+.summary-kpi.pending strong,
+.summary-kpi.warning strong {
+  color: #8a5a10;
+}
+
+.summary-kpi.danger {
+  background: linear-gradient(180deg, #fff2f3 0%, #fde5e8 100%);
+  border-color: #efc6cd;
+}
+
+.summary-kpi.success {
+  background: linear-gradient(180deg, #eefaf3 0%, #def2e6 100%);
+  border-color: #c3e4d0;
+}
+
+.summary-kpi.info {
+  background: linear-gradient(180deg, #f2f8ff 0%, #e4f0fb 100%);
+  border-color: #c8dced;
+}
+
+.context-legend-box {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #d7e6ef;
+  background: linear-gradient(180deg, #f8fcff 0%, #eef6fb 100%);
+  color: #355566;
+  display: grid;
+  gap: 6px;
+}
+
+.context-legend-box p,
+.context-legend-box ul {
+  margin: 0;
+}
+
+.context-legend-box ul {
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.expected-export-panel-inner {
+  display: grid;
+  gap: 12px;
+}
+
+.ppc-checklist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.ppc-checklist-item {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #d8e5ed;
+  background: #f9fcff;
+  display: grid;
+  gap: 4px;
+  text-align: center;
+}
+
+.ppc-checklist-item strong {
+  color: #183f52;
+  font-size: 0.9rem;
+}
+
+.ppc-checklist-item small {
+  color: #617a89;
+  font-size: 0.77rem;
+  line-height: 1.4;
+}
+
+.ppc-checklist-item.ok {
+  background: #e8f6ee;
+  border-color: #c4e3d1;
+}
+
+.ppc-checklist-item.waiting {
+  background: #fff6d6;
+  border-color: #ead799;
+}
+
+.ppc-checklist-item.blocked {
+  background: #fde9eb;
+  border-color: #ebc1c8;
+}
+
+.sheet-row-pending td {
+  background: #fef7e0;
+}
+
+.sheet-row-reserve td {
+  background: #f3f5f7;
+}
+
+.sheet-row-draft td {
+  background: #eef7ff;
+}
+
+.sheet-locked-cell {
+  opacity: 0.82;
+}
+
+.sheet-row-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-top: 6px;
+}
+
+.sheet-row-badge--pending {
+  background: #fff2c7;
+  color: #7b5900;
+}
+
+.sheet-row-badge--reserve {
+  background: #e6ebef;
+  color: #4f6675;
+}
+
+.sheet-row-badge--new {
+  background: #dff1ff;
+  color: #1f5f8a;
+}
+
+.quality-reference-list {
+  display: grid;
+  gap: 8px;
+}
+
+.quality-reference-row {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #d8e5ed;
+  background: #fff;
+}
+
+.quality-reference-row strong {
+  color: #163949;
+  font-size: 0.85rem;
+}
+
+.quality-reference-row small {
+  color: #607887;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.company-header-preview {
+  min-height: 112px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px dashed #bfd3df;
+  background: linear-gradient(180deg, #f8fcff 0%, #eef5f9 100%);
+}
+
+.company-header-preview-card {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.company-header-preview-logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #c8d8e2;
+  background: #fff;
+  display: grid;
+  place-items: center;
+}
+
+.company-header-preview-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.company-header-preview-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 800;
+  background: linear-gradient(150deg, var(--accent), var(--accent2));
+}
+
+.company-header-preview-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.company-header-preview-copy strong {
+  font-size: 0.98rem;
+  color: #163748;
+}
+
+.company-header-preview-copy small {
+  color: #607787;
+  line-height: 1.45;
 }
 
 .icon-btn {
@@ -2188,6 +2500,16 @@ footer {
   font-family: "IBM Plex Mono", monospace;
   font-size: 0.78rem;
   padding: 7px 12px;
+}
+
+footer.status-success {
+  background: #eff8f2;
+  color: #19553c;
+}
+
+footer.status-error {
+  background: #fff1f3;
+  color: #8b2432;
 }
 
 @media (max-width: 1100px) {

@@ -206,8 +206,11 @@ function normalizeSearchText(value) {
 
 function setStatus(message, isError = false) {
   const bar = $('#statusBar');
+  if (!bar) return;
   bar.textContent = message;
-  bar.style.color = isError ? '#b33446' : '#637986';
+  bar.style.color = '';
+  bar.classList.toggle('status-error', Boolean(isError));
+  bar.classList.toggle('status-success', !isError);
 }
 
 function closePlanningValidationModal() {
@@ -862,6 +865,17 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
+function formatNumberBr2(value) {
+  return Number(value || 0).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatPercentBr2(value) {
+  return `${formatNumberBr2(value)}%`;
+}
+
 function formatDateInput(value) {
   if (!value) return '';
   const date = new Date(value);
@@ -1063,6 +1077,132 @@ function selectedWorkAddress() {
   return parts.length ? parts.join(' | ') : '-';
 }
 
+function summaryKpiCardHtml(label, value, helper = '', variant = '') {
+  return `
+    <div class="summary-kpi ${variant}">
+      <label>${escapeHtml(label)}</label>
+      <strong>${escapeHtml(value)}</strong>
+      ${helper ? `<small>${escapeHtml(helper)}</small>` : ''}
+    </div>
+  `;
+}
+
+function planningModeIntroCopy() {
+  if (isPrePlanningMode()) {
+    return {
+      title: 'Pré-programação da semana',
+      text: 'Monte a primeira versão da semana seguinte, trazendo pendências e reservas anteriores para a conversa com os empreiteiros. Aqui faz sentido organizar o pacote e sinalizar o que ainda precisa ser validado na reunião de PPC.',
+    };
+  }
+  return {
+    title: 'Programação da semana',
+    text: 'Aqui entra a versão validada da semana. Use esta etapa para ajustar a programação após a reunião de PPC e fechar o pacote que vai gerar as atividades previstas, PDFs e controles da semana.',
+  };
+}
+
+function buildPlanningSummaryHtml(tasks = [], drafts = []) {
+  const weekContext = planningWeekContext();
+  const allRows = [
+    ...drafts.map((item) => ({ ...item, __draft: true })),
+    ...tasks,
+  ];
+  const total = allRows.length;
+  const pending = tasks.filter((task) => taskDisplayStatusCode(task, weekContext, false) === 'PENDENTE').length;
+  const reserve = allRows.filter((task) => String(task.status || '').toUpperCase() === 'RESERVA').length;
+  const rework = allRows.filter((task) => String(task.status || '').toUpperCase() === 'RETRABALHO').length;
+  return [
+    summaryKpiCardHtml('Total de Linhas', String(total), 'Inclui linhas novas ainda não salvas.', 'info'),
+    summaryKpiCardHtml('Pendências', String(pending), 'Vieram de semanas anteriores e ficam travadas nos campos críticos.', pending ? 'warning' : 'success'),
+    summaryKpiCardHtml('Reservas', String(reserve), 'Podem continuar como reserva ou virar planejada na nova semana.', reserve ? 'info' : 'success'),
+    summaryKpiCardHtml('Retrabalhos', String(rework), 'Mostra quantas atividades já entraram com status de retrabalho.', rework ? 'danger' : 'success'),
+  ].join('');
+}
+
+function renderPlanningLegend() {
+  const box = $('#planningLegendBox');
+  if (!box) return;
+  box.innerHTML = `
+    <p><strong>Como ler a planilha desta etapa</strong></p>
+    <ul>
+      <li><strong>Pendente:</strong> veio de semana anterior, mantém tarefa e locais travados para preservar o histórico.</li>
+      <li><strong>Reserva:</strong> volta para a semana seguinte como reserva, mas o status pode ser ajustado para <em>Planejada</em> quando fizer sentido.</li>
+      <li><strong>Rascunho:</strong> linha azul clara criada localmente e ainda não salva.</li>
+      <li><strong>Semana de origem:</strong> ajuda a entender de onde cada atividade veio e evita perder o contexto no meio da programação.</li>
+    </ul>
+  `;
+}
+
+function homeQuickActionsData() {
+  const current = suggestedCurrentWeekNumberForCurrentWork();
+  if (!current) return [];
+  const preWeek = workWeekByNumber(current + 1);
+  const feedbackWeek = workWeekByNumber(Math.max(1, current - 1));
+  const actions = [];
+
+  if (preWeek && String(preWeek.prePlanningStatus || '').toUpperCase() !== 'CLOSED') {
+    actions.push({
+      title: `Fechar Pré-programação da Semana ${preWeek.weekNumber}`,
+      text: 'Essa costuma ser a primeira entrega da semana seguinte. Vale revisar pendências, reservas e empreiteiros ativos.',
+      dataset: { main: 'preprogramacao' },
+    });
+  } else if (preWeek && preWeek.ppcMeeting?.isClosed !== true) {
+    actions.push({
+      title: `Conduzir Reunião de PPC da Semana ${preWeek.weekNumber}`,
+      text: 'A pré-programação já está pronta. Agora faz sentido fechar presença, ata e validar os ajustes com os empreiteiros.',
+      dataset: { main: 'reuniaoppc' },
+    });
+  } else if (preWeek && String(preWeek.planningStatus || '').toUpperCase() !== 'CLOSED') {
+    actions.push({
+      title: `Finalizar Programação da Semana ${preWeek.weekNumber}`,
+      text: 'A reunião já foi encerrada. Falta consolidar a versão final que alimenta atividades previstas, PDFs e envios.',
+      dataset: { main: 'programacao' },
+    });
+  }
+
+  if (feedbackWeek && String(feedbackWeek.feedbackStatus || '').toUpperCase() !== 'CLOSED') {
+    actions.push({
+      title: `Preencher Feedback da Semana ${feedbackWeek.weekNumber}`,
+      text: 'Essa etapa fecha o que realmente aconteceu em campo e alimenta relatórios, pendências e histórico.',
+      dataset: { main: 'feedback' },
+    });
+  } else if (feedbackWeek && String(feedbackWeek.qualityStatus || '').toUpperCase() !== 'CLOSED') {
+    actions.push({
+      title: `Concluir Qualidade Percebida da Semana ${feedbackWeek.weekNumber}`,
+      text: 'Com o feedback fechado, falta registrar a leitura qualitativa dos empreiteiros da semana.',
+      dataset: { main: 'qualidade' },
+    });
+  }
+
+  if (!actions.length) {
+    actions.push({
+      title: 'Fluxo da obra em dia',
+      text: 'As etapas próximas já estão fechadas. Você pode seguir para relatórios, histórico ou revisar os cadastros da obra.',
+      dataset: { main: 'gestao', dashboard: 'relatorio' },
+    });
+  }
+
+  return actions;
+}
+
+function renderWorkWelcomeActionCards() {
+  const container = $('#obraHomeActionCards');
+  if (!container) return;
+  const cards = homeQuickActionsData();
+  container.innerHTML = cards.map((card) => `
+    <div class="obra-home-action-card">
+      <strong>${escapeHtml(card.title)}</strong>
+      <p>${escapeHtml(card.text)}</p>
+      <button
+        type="button"
+        class="obra-home-link"
+        data-work-home-link="${escapeHtml(card.dataset.main || '')}"
+        ${card.dataset.dashboard ? `data-work-home-dashboard="${escapeHtml(card.dataset.dashboard)}"` : ''}
+        ${card.dataset.obra ? `data-work-home-obra="${escapeHtml(card.dataset.obra)}"` : ''}
+      >Abrir</button>
+    </div>
+  `).join('');
+}
+
 function renderWorkWelcomePanel() {
   const work = selectedWork();
   const titleEl = $('#obraHomeTitle');
@@ -1087,6 +1227,7 @@ function renderWorkWelcomePanel() {
   }
 
   if (statusBody) renderWorkWelcomeStatusTable();
+  renderWorkWelcomeActionCards();
 }
 
 function workWeekByNumber(weekNumber) {
@@ -1593,11 +1734,11 @@ function syncWeekControlButtons() {
   const closeBtn = $('#closePlanningBtn');
   const reopenBtn = $('#reopenBtn');
   if (!openBtn || !closeBtn || !reopenBtn) return;
+  openBtn.classList.add('hidden');
 
   const canEdit = hasAnyRole(EDIT_ROLES);
   const preMode = isPrePlanningMode();
   if (!canEdit) {
-    openBtn.classList.add('hidden');
     closeBtn.classList.add('hidden');
     reopenBtn.classList.add('hidden');
     renderWeekStatusInfo();
@@ -1606,7 +1747,6 @@ function syncWeekControlButtons() {
 
   const typedWeekNumber = numericWeekField();
   if (!typedWeekNumber) {
-    openBtn.classList.add('hidden');
     closeBtn.classList.add('hidden');
     reopenBtn.classList.add('hidden');
     renderWeekStatusInfo();
@@ -1615,7 +1755,6 @@ function syncWeekControlButtons() {
 
   const week = consideredWeekFromFieldOrSelection();
   if (!week) {
-    openBtn.classList.remove('hidden');
     closeBtn.classList.add('hidden');
     reopenBtn.classList.add('hidden');
     renderWeekStatusInfo();
@@ -3418,6 +3557,38 @@ function setCompanyLogoPreview(src) {
   previewEl.classList.add('hidden');
 }
 
+function renderCompanyHeaderPreview() {
+  const previewEl = $('#companyHeaderPreview');
+  if (!previewEl) return;
+  const currentLogo = $('#companyLogoPreview')?.getAttribute('src') || String(state.appConfig?.logoPath || '').trim();
+  const companyName = $('#companyName')?.value?.trim() || state.appConfig?.companyName || 'Nome da construtora';
+  const companyCnpj = $('#companyCnpj')?.value?.trim() || state.appConfig?.companyCnpj || 'CNPJ não informado';
+  const companySite = $('#companySite')?.value?.trim() || state.appConfig?.companySite || 'Site não informado';
+  const companyAddress = buildCompanyAddressFromFields({
+    street: $('#companyStreet')?.value?.trim() || state.appConfig?.companyStreet || '',
+    number: $('#companyNumber')?.value?.trim() || state.appConfig?.companyNumber || '',
+    complement: $('#companyComplement')?.value?.trim() || state.appConfig?.companyComplement || '',
+    neighborhood: $('#companyNeighborhood')?.value?.trim() || state.appConfig?.companyNeighborhood || '',
+    city: $('#companyCity')?.value?.trim() || state.appConfig?.companyCity || '',
+    stateUf: $('#companyState')?.value?.trim() || state.appConfig?.companyState || '',
+    cep: $('#companyCep')?.value?.trim() || state.appConfig?.companyCep || '',
+  }) || 'Endereço da construtora';
+
+  previewEl.innerHTML = `
+    <div class="company-header-preview-card">
+      <div class="company-header-preview-logo">
+        ${currentLogo ? `<img src="${escapeHtml(currentLogo)}" alt="Logo da construtora" />` : '<div class="company-header-preview-fallback">PPC</div>'}
+      </div>
+      <div class="company-header-preview-copy">
+        <strong>${escapeHtml(companyName)}</strong>
+        <small>${escapeHtml(companyCnpj)}</small>
+        <small>${escapeHtml(companyAddress)}</small>
+        <small>${escapeHtml(companySite)}</small>
+      </div>
+    </div>
+  `;
+}
+
 function renderCompanyForm() {
   const cfg = state.appConfig || {};
   const nameEl = $('#companyName');
@@ -3460,6 +3631,7 @@ function renderCompanyForm() {
   logoEl.value = '';
   logoInfoEl.textContent = cfg.logoPath ? 'Logo atual: imagem carregada.' : 'Logo atual: não informado.';
   setCompanyLogoPreview(cfg.logoPath || '');
+  renderCompanyHeaderPreview();
 }
 
 async function loadAppConfig() {
@@ -3514,20 +3686,26 @@ function handleCompanyLogoSelection() {
   if (!file) {
     logoInfoEl.textContent = state.appConfig?.logoPath ? 'Logo atual: imagem carregada.' : 'Logo atual: não informado.';
     setCompanyLogoPreview(state.appConfig?.logoPath || '');
+    renderCompanyHeaderPreview();
     return;
   }
   if (!String(file.type || '').toLowerCase().startsWith('image/')) {
     input.value = '';
     logoInfoEl.textContent = 'Arquivo inválido. Selecione uma imagem.';
     setCompanyLogoPreview(state.appConfig?.logoPath || '');
+    renderCompanyHeaderPreview();
     return;
   }
   logoInfoEl.textContent = `Logo selecionada: ${file.name}`;
   readFileAsDataUrl(file)
-    .then((dataUrl) => setCompanyLogoPreview(dataUrl))
+    .then((dataUrl) => {
+      setCompanyLogoPreview(dataUrl);
+      renderCompanyHeaderPreview();
+    })
     .catch(() => {
       logoInfoEl.textContent = 'Falha ao carregar miniatura do logo.';
       setCompanyLogoPreview(state.appConfig?.logoPath || '');
+      renderCompanyHeaderPreview();
     });
 }
 
@@ -4059,6 +4237,10 @@ function renderSheetTaskRow(task, canEdit, _canCancel, isDraft = false) {
   const plannedDaySet = new Set((task.plannedDays || []).map((d) => String(d.weekday || '').toUpperCase()));
   const status = taskDisplayStatusCode(task, planningWeekContext(), isDraft);
   const storedStatus = String(task.status || 'PLANNED').toUpperCase();
+  const visualStatus = isDraft ? 'RASCUNHO' : status;
+  const rowClass = isDraft
+    ? 'sheet-row-draft'
+    : (status === 'PENDENTE' ? 'sheet-row-pending' : (storedStatus === 'RESERVA' ? 'sheet-row-reserve' : ''));
   const editable = canEdit;
   const disabled = editable ? '' : 'disabled';
   const lockPendingFields = status === 'PENDENTE';
@@ -4075,9 +4257,12 @@ function renderSheetTaskRow(task, canEdit, _canCancel, isDraft = false) {
   const contractorSelect = `<select class="sheet-contractor" data-labor-type="${escapeHtml(laborType)}" ${disabled}>${contractorOptionsHtml(selectedContractorId, laborType)}</select>`;
   const contractorLaborLine = `<small class="sheet-contractor-labor">${escapeHtml(contractorLaborTypeLabel(selectedContractorId, laborType))}</small>`;
   const supervisorInput = `<input type="hidden" class="sheet-supervisor" value="${escapeHtml(task.supervisor || '')}" />`;
-  const location1Select = `<select class="sheet-location1" ${pendingLockDisabled}>${locationLevel1OptionsHtml(level1)}</select>`;
-  const location2Select = `<select class="sheet-location2" ${pendingLockDisabled}>${locationLevel2OptionsHtml(level1, level2)}</select>`;
-  const descriptionInput = `<textarea class="sheet-desc" rows="2" ${pendingLockDisabled}>${escapeHtml(task.description || '')}</textarea>`;
+  const location1Select = `<select class="sheet-location1 ${lockPendingFields ? 'sheet-locked-cell' : ''}" ${pendingLockDisabled}>${locationLevel1OptionsHtml(level1)}</select>`;
+  const location2Select = `<select class="sheet-location2 ${lockPendingFields ? 'sheet-locked-cell' : ''}" ${pendingLockDisabled}>${locationLevel2OptionsHtml(level1, level2)}</select>`;
+  const descriptionInput = `<textarea class="sheet-desc ${lockPendingFields ? 'sheet-locked-cell' : ''}" rows="2" ${pendingLockDisabled}>${escapeHtml(task.description || '')}</textarea>`;
+  const badgeVariant = isDraft ? 'new' : (status === 'PENDENTE' ? 'pending' : (storedStatus === 'RESERVA' ? 'reserve' : ''));
+  const badgeLabel = isDraft ? 'Rascunho' : (status === 'PENDENTE' ? 'Pendente' : (storedStatus === 'RESERVA' ? 'Reserva' : ''));
+  const originWeekExtra = badgeVariant ? `<div class="sheet-row-badge sheet-row-badge--${badgeVariant}">${escapeHtml(badgeLabel)}</div>` : '';
   const plannedStartValue = formatSheetDateMultiline(task.plannedStart);
   const plannedEndValue = formatSheetDateMultiline(task.plannedEnd);
   const plannedStartInput = `<textarea class="sheet-start" rows="2" placeholder="DD/MM/\nAAAA" ${disabled}>${escapeHtml(plannedStartValue)}</textarea>`;
@@ -4103,9 +4288,9 @@ function renderSheetTaskRow(task, canEdit, _canCancel, isDraft = false) {
   if (!actions.length) actions.push('-');
 
   return `
-    <tr data-sheet-row-kind="${isDraft ? 'draft' : 'task'}" data-sheet-editable="${editable ? '1' : '0'}" data-sheet-status-base="${escapeHtml(storedStatus)}" ${isDraft ? `data-draft-id="${escapeHtml(task.draftId)}"` : `data-task-id="${task.id}"`}>
+    <tr class="${rowClass}" data-sheet-row-kind="${isDraft ? 'draft' : 'task'}" data-sheet-editable="${editable ? '1' : '0'}" data-sheet-status-base="${escapeHtml(storedStatus)}" data-sheet-status-code="${escapeHtml(visualStatus)}" ${isDraft ? `data-draft-id="${escapeHtml(task.draftId)}"` : `data-task-id="${task.id}"`}>
       <td>${sequenceInput}</td>
-      <td>${originWeekDisplay}</td>
+      <td>${originWeekDisplay}${originWeekExtra}</td>
       <td><div class="sheet-contractor-cell">${contractorSelect}${contractorLaborLine}${supervisorInput}</div></td>
       <td>${location1Select}</td>
       <td>${location2Select}</td>
@@ -4126,6 +4311,7 @@ function renderSheetTaskRow(task, canEdit, _canCancel, isDraft = false) {
 
 function renderExpectedTasksTable(tasksOverride = null, options = {}) {
   const expectedBody = $('#expectedTasksBody');
+  const stateMessage = $('#expectedStateMessage');
   if (!expectedBody) return;
   expectedBody.innerHTML = '';
   const weekContext = expectedWeekContext();
@@ -4172,6 +4358,12 @@ function renderExpectedTasksTable(tasksOverride = null, options = {}) {
       : (options.emptyMessage || 'Sem atividades previstas para a semana selecionada.');
     tr.innerHTML = `<td colspan="16">${message}</td>`;
     expectedBody.appendChild(tr);
+    if (stateMessage) stateMessage.textContent = message;
+    return;
+  }
+
+  if (stateMessage) {
+    stateMessage.textContent = `${filteredTasks.length} atividade(s) listada(s) para a semana selecionada.`;
   }
 }
 
@@ -4312,6 +4504,7 @@ function renderPpcMeetingTab() {
   const sendMinutesBtn = $('#ppcMeetingSendMinutesEmailBtn');
   const exportAllPreBtn = $('#ppcMeetingPreExportAllPdfBtn');
   const closedInfoEl = $('#ppcMeetingClosedInfo');
+  const checklistEl = $('#ppcMeetingChecklistBox');
   if (!preBody || !attendanceBody || !dateInput || !timeInput || !minutesEl) return;
 
   preBody.innerHTML = '';
@@ -4332,6 +4525,7 @@ function renderPpcMeetingTab() {
     if (sendMinutesBtn) sendMinutesBtn.disabled = true;
     if (exportAllPreBtn) exportAllPreBtn.disabled = true;
     if (closedInfoEl) closedInfoEl.textContent = '';
+    if (checklistEl) checklistEl.innerHTML = '';
     return;
   }
 
@@ -4368,6 +4562,37 @@ function renderPpcMeetingTab() {
   }
 
   const rows = ppcMeetingContractorRows(meeting);
+  if (checklistEl) {
+    const dateFilled = Boolean(dateInput.value && timeInput.value);
+    checklistEl.innerHTML = `<div class="ppc-checklist-grid">${[
+      {
+        title: 'Pré-programação',
+        helper: prePlanningClosed ? 'Etapa anterior concluída.' : 'Ainda falta fechar a etapa anterior.',
+        variant: prePlanningClosed ? 'ok' : 'blocked',
+      },
+      {
+        title: 'Data e hora',
+        helper: dateFilled ? 'Reunião agendada para esta semana.' : 'Preencha a data e o horário da reunião.',
+        variant: dateFilled ? 'ok' : 'waiting',
+      },
+      {
+        title: 'Empreiteiros ativos',
+        helper: rows.length ? `${rows.length} empreiteiro(s) carregado(s) para a semana.` : 'Nenhum empreiteiro ativo identificado.',
+        variant: rows.length ? 'ok' : 'waiting',
+      },
+      {
+        title: 'Fechamento',
+        helper: closed ? 'A lista de presença e a ata já foram encerradas.' : 'A reunião ainda está aberta para preenchimento.',
+        variant: closed ? 'ok' : 'waiting',
+      },
+    ].map((item) => `
+      <div class="ppc-checklist-item ${item.variant}">
+        <strong>${escapeHtml(item.title)}</strong>
+        <small>${escapeHtml(item.helper)}</small>
+      </div>
+    `).join('')}</div>`;
+  }
+
   if (!rows.length) {
     preBody.innerHTML = '<tr><td colspan="4">Sem empreiteiros ativos para esta semana.</td></tr>';
     attendanceBody.innerHTML = '<tr><td colspan="3">Sem empreiteiros ativos para esta semana.</td></tr>';
@@ -5131,10 +5356,20 @@ function resetFeedbackFilters() {
 function renderTasks() {
   const body = $('#tasksBody');
   const fbBody = $('#feedbackTasksBody');
+  const planningIntroTitle = $('#planningIntroTitle');
+  const planningIntroText = $('#planningIntroText');
+  const planningWeekSummary = $('#planningWeekSummary');
+  const feedbackSummaryRow = $('#feedbackSummaryRow');
+  const feedbackRulesBox = $('#feedbackRulesBox');
   closePlanningValidationModal();
   renderFeedbackWeekdayHeaders();
   body.innerHTML = '';
   fbBody.innerHTML = '';
+
+  const introCopy = planningModeIntroCopy();
+  if (planningIntroTitle) planningIntroTitle.textContent = introCopy.title;
+  if (planningIntroText) planningIntroText.textContent = introCopy.text;
+  renderPlanningLegend();
 
   renderImportGroupSelect();
   refreshFilterContractorOptions();
@@ -5266,6 +5501,38 @@ function renderTasks() {
     fbBody.appendChild(tr);
   }
 
+  if (planningWeekSummary) {
+    planningWeekSummary.innerHTML = buildPlanningSummaryHtml(state.tasks, state.sheetDraftRows);
+  }
+
+  if (feedbackSummaryRow) {
+    const statuses = state.tasks.map((task) => String(((task.feedbacks || [])[0]?.status || feedbackDefaultStatusFromTask(task) || '').toUpperCase()));
+    const executed = statuses.filter((item) => item === 'EXECUTED').length;
+    const started = statuses.filter((item) => item === 'STARTED').length;
+    const notStarted = statuses.filter((item) => item === 'NOT_STARTED').length;
+    const cancelled = statuses.filter((item) => item === 'CANCELLED').length;
+    const unplanned = state.tasks.filter((task) => task.isUnplanned === true).length;
+    feedbackSummaryRow.innerHTML = [
+      summaryKpiCardHtml('Executadas', String(executed), 'Fecham o pacote como concluído.', executed ? 'success' : 'info'),
+      summaryKpiCardHtml('Iniciadas', String(started), 'Exigem causa e comentário para histórico.', started ? 'warning' : 'success'),
+      summaryKpiCardHtml('Não iniciadas', String(notStarted), 'Também exigem causa e comentário.', notStarted ? 'danger' : 'success'),
+      summaryKpiCardHtml('Canceladas', String(cancelled), 'Não exigem causa, mas pedem comentário.', cancelled ? 'warning' : 'success'),
+      summaryKpiCardHtml('Exec. não planejadas', String(unplanned), 'Entram como ocorrência de mudança na semana.', unplanned ? 'info' : 'success'),
+    ].join('');
+  }
+
+  if (feedbackRulesBox) {
+    feedbackRulesBox.innerHTML = `
+      <p><strong>Regras rápidas do feedback</strong></p>
+      <ul>
+        <li><strong>Executada</strong>, <strong>Executada / Não planejada</strong> e <strong>Cancelada</strong> não abrem causa.</li>
+        <li><strong>Iniciada</strong> e <strong>Não iniciada</strong> exigem grupo da causa, causa e comentário.</li>
+        <li><strong>Reserva</strong> não concluída fica com fundo cinza e continua sem causa obrigatória.</li>
+        <li><strong>Salvar</strong> pode ser parcial; a validação completa acontece apenas no fechamento do feedback.</li>
+      </ul>
+    `;
+  }
+
   applyPlanningHolidayHighlights();
   applyPlanningRowFilters();
   renderExpectedTasksTable();
@@ -5278,6 +5545,60 @@ function renderQualityPdfButton() {
   const week = qualityWeekSelected();
   const isClosed = String(week?.qualityStatus || '').toUpperCase() === 'CLOSED';
   btn.classList.toggle('hidden', !isClosed);
+}
+
+function renderQualityCompletionSummary(payload, canEdit) {
+  const box = $('#qualityCompletionBox');
+  if (!box) return;
+  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+  if (!rows.length) {
+    box.innerHTML = summaryKpiCardHtml('Avaliação', 'Sem dados', 'Selecione uma semana com empreiteiros ativos.', 'info');
+    return;
+  }
+  const completed = rows.filter((row) => (
+    Number.isInteger(Number(row.qualityScore))
+    && Number.isInteger(Number(row.collaborationTeamScore))
+    && Number.isInteger(Number(row.safetyScore))
+    && Number.isInteger(Number(row.cleaningScore))
+  )).length;
+  const total = rows.length;
+  const pending = Math.max(0, total - completed);
+  const allFilled = pending === 0;
+  box.innerHTML = [
+    summaryKpiCardHtml('Empreiteiros avaliados', `${completed}/${total}`, allFilled ? 'Todos os itens obrigatórios foram preenchidos.' : 'Ainda faltam avaliações para fechar a semana.', allFilled ? 'success' : 'warning'),
+    summaryKpiCardHtml('Pendentes', String(pending), pending ? 'Enquanto houver pendência, o fechamento fica bloqueado.' : 'Semana pronta para fechamento.', pending ? 'danger' : 'success'),
+    summaryKpiCardHtml('Situação', allFilled ? 'Pronta para fechar' : 'Em preenchimento', canEdit ? 'Você ainda pode salvar ajustes antes do fechamento.' : 'A semana já está fechada para edição.', allFilled ? 'success' : 'info'),
+  ].join('');
+}
+
+function renderQualityReferenceBox() {
+  const box = $('#qualityReferenceBox');
+  if (!box) return;
+  const cfg = state.perceivedQualityConfig || {};
+  box.innerHTML = `
+    <div class="quality-reference-list">
+      <div class="quality-reference-row">
+        <strong>Prazo (PPC)</strong>
+        <small>Regular a partir de ${cfg.deadlineRegularPct ?? '-'}% | Bom a partir de ${cfg.deadlineGoodPct ?? '-'}%</small>
+      </div>
+      <div class="quality-reference-row">
+        <strong>Qualidade</strong>
+        <small>Regular a partir de ${cfg.qualityRegularScore ?? '-'} | Bom a partir de ${cfg.qualityGoodScore ?? '-'}</small>
+      </div>
+      <div class="quality-reference-row">
+        <strong>Colaboração</strong>
+        <small>Combina presença do encarregado na reunião de PPC com a nota da equipe. Impacto da presença: ${cfg.collaborationPresenceImpactScore ?? '-'} | Regular a partir de ${cfg.collaborationRegularScore ?? '-'} | Bom a partir de ${cfg.collaborationGoodScore ?? '-'}</small>
+      </div>
+      <div class="quality-reference-row">
+        <strong>Segurança</strong>
+        <small>Regular a partir de ${cfg.safetyRegularScore ?? '-'} | Bom a partir de ${cfg.safetyGoodScore ?? '-'}</small>
+      </div>
+      <div class="quality-reference-row">
+        <strong>Limpeza</strong>
+        <small>Regular a partir de ${cfg.cleaningRegularScore ?? '-'} | Bom a partir de ${cfg.cleaningGoodScore ?? '-'}</small>
+      </div>
+    </div>
+  `;
 }
 
 function canEditQualityWeek(week = qualityWeekSelected()) {
@@ -5299,10 +5620,12 @@ function renderQualityTable(payload) {
   if (saveBtn) saveBtn.disabled = !canEdit;
   if (closeBtn) closeBtn.disabled = !canEdit;
   renderQualityPdfButton();
+  renderQualityReferenceBox();
 
   if (!payload || !Array.isArray(payload.rows) || !payload.rows.length) {
     if (saveBtn) saveBtn.disabled = true;
     if (closeBtn) closeBtn.disabled = true;
+    renderQualityCompletionSummary(null, canEdit);
     const tr = document.createElement('tr');
     tr.innerHTML = '<td colspan="7">Sem empreiteiros ativos para avaliação nesta semana.</td>';
     body.appendChild(tr);
@@ -5323,6 +5646,7 @@ function renderQualityTable(payload) {
     `;
     body.appendChild(tr);
   });
+  renderQualityCompletionSummary(payload, canEdit);
 }
 
 function parseQualityGridScore(value) {
@@ -5446,7 +5770,7 @@ async function refreshQualityTab(options = {}) {
     state.qualityWeekNumber = weekNumber;
     state.qualityData = null;
     renderQualityTable(null);
-    if (!silent) setStatus(`Semana ${weekNumber} ainda não foi aberta.`, true);
+    if (!silent) setStatus(`Semana ${weekNumber} ainda não está disponível.`, true);
     return;
   }
 
@@ -5787,6 +6111,27 @@ function renderDashboardHistory(data) {
   const causesList = $('#historyCausesList');
   const laborTypeBody = $('#historyLaborTypeBody');
   const reliabilityBody = $('#historyReliabilityBody');
+  const governanceIntro = $('#historyGovernanceIntro');
+  const weeklyIntro = $('#historyWeeklyIntro');
+  const monthlyIntro = $('#historyMonthlyIntro');
+  const evolutionIntro = $('#historyEvolutionIntro');
+  const planningQualityIntro = $('#historyPlanningQualityIntro');
+
+  if (governanceIntro) {
+    governanceIntro.textContent = 'Aqui a leitura é executiva: quantas semanas cumpriram prazo, quantas ficaram fora do combinado e onde o fluxo de gestão da obra está pedindo mais atenção.';
+  }
+  if (weeklyIntro) {
+    weeklyIntro.textContent = 'Esta visão mostra o comportamento semana a semana do PPC e ajuda a perceber variações curtas, rupturas de padrão e semanas fora da curva.';
+  }
+  if (monthlyIntro) {
+    monthlyIntro.textContent = 'A consolidação mensal suaviza oscilações pontuais e ajuda a comparar períodos maiores da obra com mais clareza gerencial.';
+  }
+  if (evolutionIntro) {
+    evolutionIntro.textContent = 'Aqui entram as contagens acumuladas do histórico: o objetivo é enxergar volume, distribuição e impacto das mudanças que aconteceram nas semanas da obra.';
+  }
+  if (planningQualityIntro) {
+    planningQualityIntro.textContent = 'Estes gráficos e tabelas mostram quanto o plano inicial permaneceu estável até a versão final e até a execução, medindo a consistência do processo de planejamento.';
+  }
 
   [kpi, governance, trendBars, monthlyPerfBars, monthlyEvolutionBars, planningQualityBars, contractorBody, zoneBody, monthlyGlobalBody, monthlyContractorBody, causesList, laborTypeBody, reliabilityBody].forEach((el) => {
     if (el) el.innerHTML = '';
@@ -6661,7 +7006,7 @@ async function autoLoadProgramacaoTab(options = {}) {
     state.sheetDraftRows = [];
     await loadTasksAndDashboard();
     renderWeather();
-    if (!silent) setStatus(`Semana ${typedWeekNumber} ainda não foi aberta.`);
+    if (!silent) setStatus(`Semana ${typedWeekNumber} ainda não está disponível.`);
     return;
   }
 
@@ -8554,9 +8899,18 @@ async function handleWeekCreate(event) {
 async function handleWeekRefresh() {
   try {
     const modeLabel = planningModeLabel();
-    const targetWeek = await syncSelectedWeekFromWeekFieldIfNeeded();
+    let targetWeek = await syncSelectedWeekFromWeekFieldIfNeeded();
     if (!targetWeek?.id) {
-      const msg = 'Semana ainda não foi aberta. Use "Abrir semana" para criar e depois atualizar.';
+      const typedWeekNumber = numericWeekField();
+      if (typedWeekNumber) {
+        targetWeek = await ensureWeekExists(typedWeekNumber, { silent: true });
+        if (targetWeek?.id) {
+          state.selectedWeekId = targetWeek.id;
+        }
+      }
+    }
+    if (!targetWeek?.id) {
+      const msg = 'Não foi possível disponibilizar a semana informada agora.';
       setStatus(msg, true);
       openPlanningValidationModal(msg, [], { title: 'Atualização da Semana' });
       return;
@@ -8611,9 +8965,9 @@ async function refreshExpectedActivitiesTab(options = {}) {
     state.expectedWeekNumber = weekNumber;
     state.expectedTasks = [];
     state.expectedEmailContractors = [];
-    renderExpectedTasksTable([], { emptyMessage: `Semana ${weekNumber} ainda não foi aberta.` });
+    renderExpectedTasksTable([], { emptyMessage: `Semana ${weekNumber} ainda não está disponível.` });
     renderExpectedExportActions(null, []);
-    if (!silent) setStatus(`Semana ${weekNumber} ainda não foi aberta.`, true);
+    if (!silent) setStatus(`Semana ${weekNumber} ainda não está disponível.`, true);
     return;
   }
 
@@ -8673,7 +9027,7 @@ async function refreshPpcMeetingTab(options = {}) {
     state.ppcMeetingWeekNumber = weekNumber;
     state.ppcMeetingData = null;
     renderPpcMeetingTab();
-    if (!silent) setStatus(`Semana ${weekNumber} ainda não foi aberta.`, true);
+    if (!silent) setStatus(`Semana ${weekNumber} ainda não está disponível.`, true);
     return;
   }
 
@@ -8710,7 +9064,7 @@ async function refreshFeedbackTab(options = {}) {
 
   const week = state.weeks.find((item) => Number(item.weekNumber) === Number(weekNumber));
   if (!week) {
-    if (!silent) setStatus(`Semana ${weekNumber} ainda não foi aberta.`, true);
+    if (!silent) setStatus(`Semana ${weekNumber} ainda não está disponível.`, true);
     const body = $('#feedbackTasksBody');
     if (body) body.innerHTML = '<tr><td colspan="16">Semana não encontrada.</td></tr>';
     const submitBtn = $('#saveFeedbackInlineBtn');
@@ -10754,6 +11108,11 @@ function bindEvents() {
   });
   $('#companyForm').addEventListener('submit', handleCompanySave);
   $('#companyLogo').addEventListener('change', handleCompanyLogoSelection);
+  ['companyName', 'companyCnpj', 'companyCep', 'companyStreet', 'companyNeighborhood', 'companyCity', 'companyState', 'companyNumber', 'companyComplement', 'companySite']
+    .forEach((id) => {
+      const input = $(`#${id}`);
+      if (input) input.addEventListener('input', renderCompanyHeaderPreview);
+    });
   $('#closeCompanySavedModalBtn').addEventListener('click', closeCompanySavedModal);
   $('#companySavedModal').addEventListener('click', (event) => {
     if (event.target.id === 'companySavedModal') closeCompanySavedModal();

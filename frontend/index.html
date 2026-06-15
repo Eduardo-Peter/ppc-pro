@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PPC-Pro V1</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%230a8a7a'/%3E%3Cstop offset='1' stop-color='%231a5ea5'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='38' text-anchor='middle' font-size='20' font-family='Arial,sans-serif' font-weight='700' fill='white'%3EPPC%3C/text%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -133,6 +134,7 @@
         <div class="side-nav-content">
           <section class="side-nav-group" data-side-mode="cadastros">
             <h3>Cadastros Gerais</h3>
+            <p class="side-nav-description">Configurações-base do sistema, válidas para todas as obras.</p>
             <details class="side-nav-subgroup" open>
               <summary>Cadastro de Usuário</summary>
               <button type="button" class="side-nav-item" data-side-main="cadastros" data-side-cadastro="users" data-side-user-tab="users">Usuários</button>
@@ -148,6 +150,7 @@
 
           <section class="side-nav-group" data-side-mode="obra">
             <h3>Programação Semanal</h3>
+            <p class="side-nav-description">Fluxo principal da semana: preparar, reunir, validar e distribuir atividades.</p>
             <button type="button" class="side-nav-item" data-side-main="obrahome">Tela Inicial</button>
             <button type="button" class="side-nav-item" data-side-main="preprogramacao">Pré-Programação da Semana</button>
             <button type="button" class="side-nav-item" data-side-main="reuniaoppc">Reunião de PPC</button>
@@ -157,18 +160,21 @@
 
           <section class="side-nav-group" data-side-mode="obra">
             <h3>Feedback</h3>
+            <p class="side-nav-description">Registrar execução da semana e avaliar a percepção da equipe sobre os empreiteiros.</p>
             <button type="button" class="side-nav-item" data-side-main="feedback">Feedback da Semana</button>
             <button type="button" class="side-nav-item" data-side-main="qualidade">Qualidade Percebida</button>
           </section>
 
           <section class="side-nav-group" data-side-mode="obra" data-side-requires-dashboard>
             <h3>Gestão e Dashboards</h3>
+            <p class="side-nav-description">Relatórios analíticos da semana e visão histórica acumulada da obra.</p>
             <button type="button" class="side-nav-item" data-side-main="gestao" data-side-dashboard="relatorio">Relatório da Semana</button>
             <button type="button" class="side-nav-item" data-side-main="gestao" data-side-dashboard="historico">Histórico</button>
           </section>
 
           <section class="side-nav-group" data-side-mode="obra">
             <h3>Cadastros da Obra</h3>
+            <p class="side-nav-description">Estrutura, parâmetros e informações operacionais específicas desta obra.</p>
             <button type="button" class="side-nav-item" data-side-main="cadastrosObra" data-side-obra="zoneamento">Zoneamento</button>
             <button type="button" class="side-nav-item" data-side-main="cadastrosObra" data-side-obra="empreiteiros">Empreiteiros</button>
             <button type="button" class="side-nav-item" data-side-main="cadastrosObra" data-side-obra="grupos">Grupos de Atividades da Obra</button>
@@ -215,6 +221,7 @@
 
         <article class="panel hidden cadastro-view" id="cadastroUsersView">
           <h2>Cadastro de Usuário</h2>
+          <p class="panel-intro-text">Cadastre pessoas, vincule obras e associe perfis de permissionamento conforme a responsabilidade de cada usuário.</p>
           <section class="tabs user-cadastro-tabs hidden" id="userCadastroTabs">
             <button type="button" class="tab-btn user-cadastro-tab-btn active" data-user-cadastro-tab="users">Usuários</button>
             <button type="button" class="tab-btn user-cadastro-tab-btn" data-user-cadastro-tab="profiles">Perfis de permissionamento</button>
@@ -354,6 +361,7 @@
 
         <article class="panel hidden cadastro-view" id="cadastroWorksView">
           <h2>Cadastro de Obra</h2>
+          <p class="panel-intro-text">Cadastre a obra e seus parâmetros principais. Esses dados alimentam o fluxo semanal, os relatórios e os documentos.</p>
           <div class="actions-row">
             <button type="button" id="openWorkModalBtn">Cadastrar Obra</button>
           </div>
@@ -502,6 +510,7 @@
 
         <article class="panel hidden cadastro-view" id="cadastroContractorsView">
           <h2>Cadastro de Empreiteiros</h2>
+          <p class="panel-intro-text">Esses dados serão usados no planejamento, nos envios por e-mail, nos relatórios e nos vínculos por obra.</p>
           <div class="actions-row">
             <button type="button" id="openContractorModalBtn">Cadastrar Empreiteiro</button>
           </div>
@@ -600,6 +609,7 @@
 
         <article class="panel hidden cadastro-view" id="cadastroCausesView">
           <h2>Cadastro de Causas de Não Cumprimento</h2>
+          <p class="panel-intro-text">Cadastre totalizadoras e causas filhas para padronizar o preenchimento do feedback e a análise dos relatórios.</p>
           <form id="causeForm" class="form-grid">
             <select id="causeLevel" required>
               <option value="1">Nível 1 - Totalizadora</option>
@@ -637,6 +647,7 @@
 
         <article class="panel hidden cadastro-view" id="cadastroGroupsView">
           <h2>Cadastro de Grupo de Atividades</h2>
+          <p class="panel-intro-text">Cadastre grupos-pai e, dentro deles, as tarefas-filhas que poderão ser importadas para as obras e semanas.</p>
           <section class="cadastro-section-card">
             <h3>Cadastro de Grupo</h3>
             <form id="taskGroupForm" class="form-grid">
@@ -684,6 +695,7 @@
 
         <article class="panel hidden cadastro-view" id="cadastroLaborTypesView">
           <h2>Cadastro de Tipos de Mão de Obra</h2>
+          <p class="panel-intro-text">Este cadastro é usado para filtrar empreiteiros, tarefas, grupos de atividades e relatórios por especialidade.</p>
           <section class="cadastro-section-card">
             <h3>Cadastro de Tipo de Mão de Obra</h3>
             <form id="contractorFunctionForm" class="form-grid">
@@ -714,6 +726,7 @@
 
         <article class="panel hidden cadastro-view" id="cadastroCompanyView">
           <h2>Cadastro da Construtora</h2>
+          <p class="panel-intro-text">Os dados abaixo compõem o cabeçalho dos relatórios, documentos e PDFs oficiais do sistema.</p>
           <form id="companyForm" class="work-modal-form company-form">
             <div class="work-modal-row">
               <div class="work-modal-meta">
@@ -839,6 +852,14 @@
               </div>
             </div>
 
+            <div class="work-modal-row">
+              <div class="work-modal-meta">
+                <strong>Prévia do Cabeçalho</strong>
+                <small>Visual simplificado de como a construtora aparecerá nos relatórios.</small>
+              </div>
+              <div id="companyHeaderPreview" class="work-modal-input company-header-preview"></div>
+            </div>
+
             <div class="work-modal-row company-form-actions-row">
               <div></div>
               <div class="work-modal-input company-form-actions">
@@ -878,9 +899,14 @@
               </div>
             </div>
             <p class="obra-home-intro">
-              Escolha abaixo o módulo que deseja acessar. O menu lateral continua disponível para navegação completa.
+              Escolha abaixo o módulo que deseja acessar. O menu lateral continua disponível para navegação completa e detalhada.
             </p>
           </div>
+
+          <section class="obra-home-status-section">
+            <h3>Próximas Ações Recomendadas</h3>
+            <div id="obraHomeActionCards" class="obra-home-action-cards"></div>
+          </section>
 
           <section class="obra-home-status-section">
             <h3>Painel Resumido das Semanas</h3>
@@ -913,7 +939,7 @@
           <div class="obra-home-sections">
             <section class="obra-home-section">
               <h3>Programação Semanal</h3>
-              <div class="obra-home-links">
+              <div class="obra-home-links obra-home-links--vertical">
                 <button type="button" class="obra-home-link" data-work-home-link="preprogramacao">Pré-Programação da Semana</button>
                 <button type="button" class="obra-home-link" data-work-home-link="reuniaoppc">Reunião de PPC</button>
                 <button type="button" class="obra-home-link" data-work-home-link="programacao">Programação da Semana</button>
@@ -923,7 +949,7 @@
 
             <section class="obra-home-section">
               <h3>Feedback</h3>
-              <div class="obra-home-links">
+              <div class="obra-home-links obra-home-links--vertical">
                 <button type="button" class="obra-home-link" data-work-home-link="feedback">Feedback da Semana</button>
                 <button type="button" class="obra-home-link" data-work-home-link="qualidade">Qualidade Percebida</button>
               </div>
@@ -931,7 +957,7 @@
 
             <section class="obra-home-section">
               <h3>Gestão e Dashboards</h3>
-              <div class="obra-home-links">
+              <div class="obra-home-links obra-home-links--vertical">
                 <button type="button" class="obra-home-link" data-work-home-link="gestao" data-work-home-dashboard="relatorio">Relatório da Semana</button>
                 <button type="button" class="obra-home-link" data-work-home-link="gestao" data-work-home-dashboard="historico">Histórico</button>
               </div>
@@ -939,7 +965,7 @@
 
             <section class="obra-home-section">
               <h3>Cadastros da Obra</h3>
-              <div class="obra-home-links">
+              <div class="obra-home-links obra-home-links--vertical">
                 <button type="button" class="obra-home-link" data-work-home-link="cadastrosObra" data-work-home-obra="zoneamento">Zoneamento</button>
                 <button type="button" class="obra-home-link" data-work-home-link="cadastrosObra" data-work-home-obra="empreiteiros">Empreiteiros</button>
                 <button type="button" class="obra-home-link" data-work-home-link="cadastrosObra" data-work-home-obra="grupos">Grupos de Atividades da Obra</button>
@@ -955,6 +981,10 @@
       <section class="tab-panel" data-tab-panel="programacao">
         <article class="panel">
           <h2 id="planningControlTitle">Abertura e controle da semana</h2>
+          <div class="flow-intro-card">
+            <strong id="planningIntroTitle">Etapa da semana</strong>
+            <p id="planningIntroText">Aqui a equipe organiza as atividades da semana e prepara o fechamento da etapa.</p>
+          </div>
           <form id="weekForm" class="form-grid week-grid">
             <input id="weekNumber" type="number" min="1" placeholder="Número da semana" required />
             <input id="weekStartPreview" placeholder="Início automático (DD/MM/AAAA)" readonly />
@@ -963,6 +993,7 @@
           </form>
           <div id="planningDeadlineCountdown" class="deadline-countdown-box hidden"></div>
           <p id="weekStatusInfo" class="week-status">Status da semana: -</p>
+          <div id="planningWeekSummary" class="summary-kpi-grid"></div>
           <small id="weekPeriodInfo" class="hidden">A semana é calculada automaticamente a partir da data de início da obra (segunda a sábado).</small>
           <div class="actions-row" id="weekActionRow">
             <button id="openWeekBtn" type="button">Abrir semana</button>
@@ -974,6 +1005,11 @@
         <article class="panel" id="planningWeatherPanel">
           <h2 id="planningWeatherTitle">Previsão do tempo</h2>
           <div id="weatherStrip" class="weather-strip"></div>
+        </article>
+
+        <article class="panel">
+          <h3>Leitura rápida da planilha</h3>
+          <div id="planningLegendBox" class="context-legend-box"></div>
         </article>
 
         <article class="panel hidden">
@@ -1142,6 +1178,7 @@
       <section class="tab-panel" data-tab-panel="atividades">
         <article class="panel">
           <h2>Atividades previstas</h2>
+          <p class="panel-intro-text">Aqui ficam apenas as atividades validadas após o fechamento da Programação da Semana.</p>
           <div class="expected-controls">
             <div class="expected-row">
               <span class="expected-label">Semana</span>
@@ -1155,6 +1192,8 @@
               <input id="expectedWeekEnd" placeholder="DD/MM/AAAA" readonly />
             </div>
           </div>
+          <h3>Lista de atividades da semana</h3>
+          <p id="expectedStateMessage" class="panel-intro-text">Selecione a semana e atualize para visualizar as atividades previstas.</p>
           <div class="table-wrap">
             <table>
               <thead>
@@ -1206,7 +1245,11 @@
               <tbody id="expectedTasksBody"></tbody>
             </table>
           </div>
-          <div id="expectedExportPanel" class="expected-export-panel hidden">
+        </article>
+
+        <article id="expectedExportPanel" class="panel expected-export-panel hidden">
+          <h3>Documentos e envio</h3>
+          <div class="expected-export-panel-inner">
             <section class="cadastro-section-card expected-export-card">
               <h3>Exportações e PDFs</h3>
               <div class="actions-row">
@@ -1223,7 +1266,9 @@
               </div>
             </section>
           </div>
-          <div id="expectedEmailModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="expectedEmailTitle">
+        </article>
+
+        <div id="expectedEmailModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="expectedEmailTitle">
             <article class="planning-modal-card">
               <h3 id="expectedEmailTitle">Selecionar empreiteiros para envio</h3>
               <p>Selecione os empreiteiros que receberão por e-mail os PDFs de atividades previstas da semana.</p>
@@ -1234,12 +1279,12 @@
               </div>
             </article>
           </div>
-        </article>
       </section>
 
       <section class="tab-panel" data-tab-panel="reuniaoppc">
         <article class="panel">
           <h2>Reunião de PPC</h2>
+          <p class="panel-intro-text">Esta etapa organiza a reunião semanal do PPC em duas fases: preparação da reunião e registro final da presença/ata.</p>
           <div class="expected-controls">
             <div class="expected-row">
               <span class="expected-label">Semana</span>
@@ -1254,10 +1299,12 @@
             </div>
           </div>
           <div id="ppcMeetingDeadlineCountdown" class="deadline-countdown-box hidden"></div>
+          <div id="ppcMeetingChecklistBox" class="context-legend-box"></div>
         </article>
 
         <article class="panel">
           <h2>1) Pré-reunião</h2>
+          <p class="panel-intro-text">Defina data e hora, gere os PDFs de apoio e prepare a convocação dos empreiteiros ativos da semana.</p>
           <div class="work-modal-row">
             <div class="work-modal-meta">
               <strong>Data da Reunião de PPC</strong>
@@ -1310,6 +1357,7 @@
 
         <article class="panel">
           <h2>2) Pós-reunião</h2>
+          <p class="panel-intro-text">Registre presença, ata e feche oficialmente a etapa da reunião semanal.</p>
           <p id="ppcMeetingClosedInfo" class="subtle"></p>
           <div class="table-wrap">
             <table>
@@ -1433,6 +1481,7 @@
 
         <article class="panel obra-cadastro-panel hidden" data-obra-cadastro-panel="empreiteiros">
           <h2>Empreiteiros da obra</h2>
+          <p class="panel-intro-text">O empreiteiro é importado do cadastro geral para esta obra sem alterar o cadastro geral original.</p>
           <section class="cadastro-section-card">
             <h3>Cadastro de Empreiteiro na Obra</h3>
             <form id="obraContractorImportForm" class="form-grid">
@@ -1465,6 +1514,7 @@
 
         <article class="panel obra-cadastro-panel hidden" data-obra-cadastro-panel="grupos">
           <h2>Grupos de atividades da obra</h2>
+          <p class="panel-intro-text">Aqui você pode importar grupos do cadastro geral ou criar grupos exclusivos desta obra, sem afetar o cadastro geral.</p>
           <section class="cadastro-section-card">
             <h3>Carregar grupo geral para a obra</h3>
             <form id="obraTaskGroupImportForm" class="form-grid">
@@ -1514,6 +1564,7 @@
 
         <article class="panel obra-cadastro-panel hidden" data-obra-cadastro-panel="feriados">
           <h2>Feriados da obra</h2>
+          <p class="panel-intro-text">Dias cadastrados como feriado aparecem destacados no planejamento, no feedback e nos PDFs da obra.</p>
           <section class="cadastro-section-card">
             <h3>Cadastro de Feriados</h3>
             <form id="obraHolidayForm" class="form-grid">
@@ -1546,6 +1597,7 @@
           <section class="cadastro-section-card prazos-card">
             <h3>Prazos e datas</h3>
             <p id="obraDeadlineRuleHint" class="subtle prazo-hint">Defina dia e hora limite para fechamento do planejamento e do feedback da obra.</p>
+            <p class="panel-intro-text">Exemplo prático: se a etapa analisada termina no sábado, o prazo configurado será calculado dentro da própria semana da etapa correspondente, respeitando o fuso local da obra.</p>
             <form id="obraDeadlineRuleForm" class="deadlines-form">
               <div class="deadline-rule-row">
                 <label for="prePlanningDeadlineWeekday">Limite para o fechamento da pré-programação da semana (da semana que virá)</label>
@@ -1636,6 +1688,7 @@
 
         <article class="panel obra-cadastro-panel hidden" data-obra-cadastro-panel="qualidade">
           <h2>Qualidade percebida</h2>
+          <p class="panel-intro-text">Esses parâmetros definem como a obra traduz notas e percentuais em faixas de desempenho como ruim, regular e bom.</p>
           <form id="obraPerceivedQualityForm" class="quality-perceived-form">
             <section class="cadastro-section-card">
               <h3>1) Prazo</h3>
@@ -1705,6 +1758,7 @@
       <section class="tab-panel" data-tab-panel="feedback">
         <article class="panel">
           <h2>Feedback da semana</h2>
+          <p class="panel-intro-text">Use esta etapa para registrar o que foi executado, o que ficou pendente e quais causas explicam o não cumprimento do plano.</p>
           <div class="expected-controls">
             <div class="expected-row">
               <span class="expected-label">Semana</span>
@@ -1720,12 +1774,14 @@
               <button id="feedbackComparisonPdfBtn" type="button" class="secondary">Gerar PDF comparativo da semana</button>
             </div>
           </div>
+          <div id="feedbackSummaryRow" class="summary-kpi-grid"></div>
           <div class="actions-row">
             <button id="feedbackBulkExecutedBtn" type="button" class="secondary">Marcar todas como Executada</button>
             <button id="feedbackBulkStartedBtn" type="button" class="secondary">Marcar todas como Iniciada</button>
             <button id="feedbackBulkNotStartedBtn" type="button" class="secondary">Marcar todas como Não iniciada</button>
           </div>
           <div id="feedbackDeadlineCountdown" class="deadline-countdown-box hidden"></div>
+          <div id="feedbackRulesBox" class="context-legend-box"></div>
           <form id="feedbackForm" class="feedback-form feedback-form-inline">
             <input id="closeFeedbackCycle" type="checkbox" class="hidden" />
           </form>
@@ -1810,7 +1866,11 @@
               </div>
             </article>
           </div>
-          <h3>Adicionar atividade executada não planejada</h3>
+        </article>
+
+        <article class="panel">
+          <h3>Registrar atividade executada não planejada</h3>
+          <p class="panel-intro-text">Use este bloco somente para atividades que não estavam previstas na programação da semana e que ainda assim foram executadas.</p>
           <form id="feedbackNewTaskForm" class="form-grid">
             <select id="feedbackNewLocation1">
               <option value="">Local 1</option>
@@ -1964,10 +2024,12 @@
           <article class="panel split">
             <div>
               <h3>Governança do processo</h3>
+              <p id="historyGovernanceIntro" class="panel-intro-text"></p>
               <div class="kpis dashboard-kpis-compact" id="historyGovernanceKpis"></div>
             </div>
             <div>
               <h3>Desempenho semanal</h3>
+              <p id="historyWeeklyIntro" class="panel-intro-text"></p>
               <div id="historyTrendBars" class="chart-bars"></div>
             </div>
           </article>
@@ -1975,16 +2037,19 @@
           <article class="panel split">
             <div>
               <h3>Desempenho mensal</h3>
+              <p id="historyMonthlyIntro" class="panel-intro-text"></p>
               <div id="historyMonthlyPerformanceBars" class="chart-bars"></div>
             </div>
             <div>
               <h3>Evolução mensal (planejadas, canceladas, não executadas, N/P executadas)</h3>
+              <p id="historyEvolutionIntro" class="panel-intro-text"></p>
               <div id="historyMonthlyEvolutionBars" class="chart-bars"></div>
             </div>
           </article>
 
           <article class="panel">
             <h3>Qualidade do planejamento</h3>
+            <p id="historyPlanningQualityIntro" class="panel-intro-text"></p>
             <div id="historyPlanningQualityBars" class="chart-bars"></div>
           </article>
 
@@ -2112,6 +2177,7 @@
       <section class="tab-panel" data-tab-panel="qualidade">
         <article class="panel">
           <h2>Qualidade percebida</h2>
+          <p class="panel-intro-text">A Qualidade Percebida só pode ser fechada após o fechamento do Feedback da Semana e com 100% dos empreiteiros avaliados.</p>
           <div class="expected-controls">
             <div class="expected-row">
               <span class="expected-label">Semana</span>
@@ -2128,7 +2194,12 @@
             </div>
           </div>
           <div id="qualityDeadlineCountdown" class="deadline-countdown-box hidden"></div>
+          <div id="qualityCompletionBox" class="summary-kpi-grid"></div>
           <button id="closeQualityWeekBtn" type="button" class="danger feedback-close-btn">Fechar qualidade percebida da semana</button>
+        </article>
+        <article class="panel">
+          <h3>Faixas de avaliação da obra</h3>
+          <div id="qualityReferenceBox" class="context-legend-box"></div>
         </article>
         <article class="panel">
           <h2>Itens de Qualidade Percebida</h2>
