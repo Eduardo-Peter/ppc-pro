@@ -359,6 +359,51 @@ function samePlanningDays(a = [], b = []) {
   return left.every((item, index) => item === right[index]);
 }
 
+async function resequencePlanningTasksForWeek(weekId, tx = prisma) {
+  const rows = await tx.task.findMany({
+    where: { currentWeekId: weekId },
+    orderBy: [
+      { sequenceNumber: 'asc' },
+      { id: 'asc' },
+    ],
+    select: { id: true, sequenceNumber: true },
+  });
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const nextSequence = index + 1;
+    if (Number(rows[index].sequenceNumber) === nextSequence) continue;
+    // eslint-disable-next-line no-await-in-loop
+    await tx.task.update({
+      where: { id: rows[index].id },
+      data: { sequenceNumber: nextSequence },
+    });
+  }
+}
+
+async function resequencePrePlanningTasksForWeek(weekId, tx = prisma) {
+  const rows = await tx.preTask.findMany({
+    where: {
+      weekId,
+      status: { not: TASK_STATUS.CANCELLED },
+    },
+    orderBy: [
+      { sequenceNumber: 'asc' },
+      { id: 'asc' },
+    ],
+    select: { id: true, sequenceNumber: true },
+  });
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const nextSequence = index + 1;
+    if (Number(rows[index].sequenceNumber) === nextSequence) continue;
+    // eslint-disable-next-line no-await-in-loop
+    await tx.preTask.update({
+      where: { id: rows[index].id },
+      data: { sequenceNumber: nextSequence },
+    });
+  }
+}
+
 function serializePreTask(item, weekId) {
   return {
     id: item.id,
@@ -507,6 +552,8 @@ router.post('/weeks/:weekId/tasks', authenticate, loadUser, requireWeekRoles([RO
     include: { contractor: true, location: true, plannedDays: true },
   });
 
+  await resequencePlanningTasksForWeek(req.week.id);
+
   await writeAudit({
     userId: req.user.id,
     workId: req.workId,
@@ -564,6 +611,8 @@ router.post('/weeks/:weekId/tasks/from-group', authenticate, loadUser, requireWe
     });
     created.push(row);
   }
+
+  await resequencePlanningTasksForWeek(req.week.id);
 
   return res.status(201).json({ count: created.length, tasks: created });
 }));
@@ -699,6 +748,8 @@ router.post('/weeks/:weekId/pre-tasks', authenticate, loadUser, requireWeekRoles
     },
   });
 
+  await resequencePrePlanningTasksForWeek(req.week.id);
+
   await writeAudit({
     userId: req.user.id,
     workId: req.workId,
@@ -764,6 +815,8 @@ router.post('/weeks/:weekId/pre-tasks/from-group', authenticate, loadUser, requi
     });
     created.push(serializePreTask(row, req.week.id));
   }
+
+  await resequencePrePlanningTasksForWeek(req.week.id);
 
   return res.status(201).json({ count: created.length, tasks: created });
 }));
@@ -839,6 +892,8 @@ router.put('/pre-tasks/:taskId', authenticate, loadUser, asyncHandler(async (req
     },
   });
 
+  await resequencePrePlanningTasksForWeek(req.preTask.week.id);
+
   return res.json(serializePreTask(updated, req.preTask.week.id));
 }));
 
@@ -863,6 +918,7 @@ router.delete('/pre-tasks/:taskId', authenticate, loadUser, asyncHandler(async (
 
   await prisma.preTaskPlannedDay.deleteMany({ where: { preTaskId: req.preTask.id } });
   await prisma.preTask.delete({ where: { id: req.preTask.id } });
+  await resequencePrePlanningTasksForWeek(req.preTask.week.id);
   return res.status(204).send();
 }));
 
@@ -907,6 +963,8 @@ router.post('/pre-tasks/:taskId/cancel', authenticate, loadUser, asyncHandler(as
     eventType: 'PRE_TASK_CANCELLED',
     description: `Tarefa herdada ${req.preTask.id} marcada como excluída na pré-programação, com histórico preservado.`,
   });
+
+  await resequencePrePlanningTasksForWeek(req.preTask.week.id);
 
   return res.json(serializePreTask(canceled, req.preTask.week.id));
 }));
@@ -976,6 +1034,7 @@ router.post('/weeks/:weekId/pre-tasks/sync-to-planning', authenticate, loadUser,
         },
       });
     }
+    await resequencePlanningTasksForWeek(req.week.id, tx);
     return preTasks.length;
   });
 
@@ -1063,6 +1122,8 @@ router.put('/tasks/:taskId', authenticate, loadUser, asyncHandler(async (req, re
     },
   });
 
+  await resequencePlanningTasksForWeek(req.task.currentWeek.id);
+
   return res.json(updated);
 }));
 
@@ -1091,6 +1152,7 @@ router.delete('/tasks/:taskId', authenticate, loadUser, asyncHandler(async (req,
   await prisma.feedback.deleteMany({ where: { taskId: req.task.id } });
   await prisma.taskPlannedDay.deleteMany({ where: { taskId: req.task.id } });
   await prisma.task.delete({ where: { id: req.task.id } });
+  await resequencePlanningTasksForWeek(req.task.currentWeek.id);
   return res.status(204).send();
 }));
 
@@ -1137,6 +1199,8 @@ router.post('/tasks/:taskId/cancel', authenticate, loadUser, asyncHandler(async 
     eventType: 'TASK_CANCELLED',
     description: `Tarefa ${req.task.id} cancelada com autorizacao.`,
   });
+
+  await resequencePlanningTasksForWeek(req.task.currentWeek.id);
 
   return res.json(canceled);
 }));
@@ -4688,6 +4752,12 @@ router.post('/weeks/:weekId/tasks/import/xlsx', authenticate, loadUser, requireW
       });
     }
     createdCount += 1;
+  }
+
+  if (isPrePhase) {
+    await resequencePrePlanningTasksForWeek(req.week.id);
+  } else {
+    await resequencePlanningTasksForWeek(req.week.id);
   }
 
   return res.json({ createdCount });

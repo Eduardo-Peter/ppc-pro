@@ -23,20 +23,22 @@
     "db:fix:pg:seq": "node scripts/reset-postgres-sequences.js",
     "db:clear:work:history:pg": "node scripts/clear-work-history.js",
     "db:copy:planning:to:pre:pg": "node scripts/copy-week-planning-to-pre.js",
+    "docs:pdf": "node scripts/generate-marketing-manual-pdfs.js",
     "db:seed:history": "node backend/prisma/seed-dashboard-history.js",
     "desktop": "echo \"Desktop app sera reconectado apos estabilizar backend\"",
     "build": "echo \"Add build steps here\""
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "prisma": "^5.17.0",
     "@prisma/client": "^5.17.0",
-    "jsonwebtoken": "^9.0.0",
     "bcryptjs": "^2.4.3",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.0",
     "pdfkit": "^0.15.2",
+    "prisma": "^5.17.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.1",
+    "puppeteer-core": "^25.1.0"
   }
 }

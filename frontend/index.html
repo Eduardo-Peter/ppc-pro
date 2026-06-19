@@ -19,7 +19,10 @@
         <p>Planejamento de curto prazo</p>
       </div>
     </div>
-    <div id="sessionInfo">Sem sessão</div>
+    <div class="session-box">
+      <div id="sessionInfo">Sem sessão</div>
+      <button id="logoutBtn" type="button" class="secondary compact hidden">Sair</button>
+    </div>
   </header>
 
   <main class="wrap">
@@ -34,15 +37,6 @@
         </label>
         <button type="submit">Acessar</button>
       </form>
-      <small>
-        Perfis teste:
-        <code>admin@ppc.local</code>,
-        <code>engenharia@ppc.local</code>,
-        <code>controller@ppc.local</code>,
-        <code>diretoria@ppc.local</code>,
-        <code>empreiteiro@ppc.local</code>,
-        <code>visualizador@ppc.local</code>.
-      </small>
     </section>
 
     <section class="panel hidden" id="gatewayView">
@@ -2247,6 +2241,7 @@
     </section>
   </main>
 
+  <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
   <aside id="weatherMiniThumb" class="weather-mini-thumb hidden" aria-live="polite"></aside>
   <footer id="statusBar">Pronto.</footer>
   <script src="./app.js"></script>

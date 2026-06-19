@@ -268,6 +268,51 @@ function normalizePlanningTaskStatusForCopy(value) {
   return TASK_STATUS.PLANNED;
 }
 
+async function resequencePlanningTasksForWeek(weekId, tx = prisma) {
+  const rows = await tx.task.findMany({
+    where: { currentWeekId: weekId },
+    orderBy: [
+      { sequenceNumber: 'asc' },
+      { id: 'asc' },
+    ],
+    select: { id: true, sequenceNumber: true },
+  });
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const nextSequence = index + 1;
+    if (Number(rows[index].sequenceNumber) === nextSequence) continue;
+    // eslint-disable-next-line no-await-in-loop
+    await tx.task.update({
+      where: { id: rows[index].id },
+      data: { sequenceNumber: nextSequence },
+    });
+  }
+}
+
+async function resequencePrePlanningTasksForWeek(weekId, tx = prisma) {
+  const rows = await tx.preTask.findMany({
+    where: {
+      weekId,
+      status: { not: TASK_STATUS.CANCELLED },
+    },
+    orderBy: [
+      { sequenceNumber: 'asc' },
+      { id: 'asc' },
+    ],
+    select: { id: true, sequenceNumber: true },
+  });
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const nextSequence = index + 1;
+    if (Number(rows[index].sequenceNumber) === nextSequence) continue;
+    // eslint-disable-next-line no-await-in-loop
+    await tx.preTask.update({
+      where: { id: rows[index].id },
+      data: { sequenceNumber: nextSequence },
+    });
+  }
+}
+
 async function ensureWeekExistsForWork(workId, workStartDate, weekNumber) {
   const normalizedWeekNumber = Math.max(1, Number.parseInt(weekNumber, 10) || 1);
   const existing = await prisma.week.findUnique({
@@ -386,6 +431,10 @@ async function rollPendingTasksToNextWeek(sourceWeek, nextWeek) {
       select: { id: true },
     });
     created.push(task.id);
+  }
+
+  if (created.length) {
+    await resequencePrePlanningTasksForWeek(nextWeek.id);
   }
 
   return { rolledCount: created.length, rolledTaskIds: created };
@@ -1449,6 +1498,8 @@ router.post('/weeks/:weekId/close-planning', authenticate, loadUser, requireWeek
     return res.status(409).json({ error: 'close_requires_location_level1' });
   }
 
+  await resequencePlanningTasksForWeek(req.week.id);
+
   const updated = await prisma.week.update({
     where: { id: req.week.id },
     data: {
@@ -1526,6 +1577,9 @@ router.post('/weeks/:weekId/close-pre-planning', authenticate, loadUser, require
         },
       });
     }
+
+    await resequencePrePlanningTasksForWeek(req.week.id, tx);
+    await resequencePlanningTasksForWeek(req.week.id, tx);
 
     return tx.week.update({
       where: { id: req.week.id },
@@ -1786,6 +1840,8 @@ router.post('/weeks/:weekId/feedback/unplanned-task', authenticate, loadUser, re
     },
   });
 
+  await resequencePlanningTasksForWeek(req.week.id);
+
   await writeAudit({
     userId: req.user.id,
     workId: req.workId,
@@ -1828,6 +1884,7 @@ router.delete('/weeks/:weekId/feedback/unplanned-task/:taskId', authenticate, lo
   await prisma.feedback.deleteMany({ where: { taskId: task.id } });
   await prisma.taskPlannedDay.deleteMany({ where: { taskId: task.id } });
   await prisma.task.delete({ where: { id: task.id } });
+  await resequencePlanningTasksForWeek(req.week.id);
 
   await writeAudit({
     userId: req.user.id,
@@ -2055,6 +2112,8 @@ router.post('/weeks/:weekId/feedback', authenticate, loadUser, requireWeekRoles(
       }
     }
   }
+
+  await resequencePlanningTasksForWeek(req.week.id);
 
   let rolloverResult = null;
   let futureWeeksResult = { createdWeekNumbers: [], ensuredWeeks: [] };
