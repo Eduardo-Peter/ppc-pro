@@ -53,6 +53,7 @@ const state = {
   workTimeZone: 'America/Sao_Paulo',
   workTimeZoneByWorkId: {},
   deadlineCountdownTimer: null,
+  saveReminderTimer: null,
   editingUserId: null,
   editingUserWorkIds: [],
   editingPermissionProfileId: null,
@@ -212,6 +213,85 @@ function setStatus(message, isError = false) {
   bar.style.color = '';
   bar.classList.toggle('status-error', Boolean(isError));
   bar.classList.toggle('status-success', !isError);
+  showToast(message, { kind: isError ? 'error' : 'success' });
+}
+
+function showToast(message, options = {}) {
+  const container = $('#toastContainer');
+  if (!container || !message) return;
+  const toast = document.createElement('div');
+  const kind = String(options.kind || 'success');
+  toast.className = `toast-message toast-${kind}`;
+  toast.textContent = String(message);
+  container.appendChild(toast);
+
+  const duration = Number(options.durationMs) > 0
+    ? Number(options.durationMs)
+    : (kind === 'error' ? 7000 : 4500);
+
+  window.setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(-4px)';
+    window.setTimeout(() => toast.remove(), 180);
+  }, duration);
+}
+
+function reminderMessageForTab(tabName = activeTabName()) {
+  if (tabName === 'preprogramacao') return 'Lembrete: salve a planilha da Pré-programação da Semana.';
+  if (tabName === 'programacao') return 'Lembrete: salve a planilha da Programação da Semana.';
+  if (tabName === 'feedback') return 'Lembrete: salve o Feedback da Semana antes de continuar.';
+  if (tabName === 'qualidade') return 'Lembrete: salve a Qualidade Percebida antes de continuar.';
+  return '';
+}
+
+function shouldShowSaveReminder(tabName = activeTabName()) {
+  if (!state.user || !$('#appView') || $('#appView').classList.contains('hidden')) return false;
+  return ['preprogramacao', 'programacao', 'feedback', 'qualidade'].includes(String(tabName || ''));
+}
+
+function resetSaveReminderTicker() {
+  if (state.saveReminderTimer) {
+    window.clearInterval(state.saveReminderTimer);
+    state.saveReminderTimer = null;
+  }
+  if (!shouldShowSaveReminder()) return;
+  state.saveReminderTimer = window.setInterval(() => {
+    const message = reminderMessageForTab();
+    if (!message || !shouldShowSaveReminder()) return;
+    showToast(message, { kind: 'reminder', durationMs: 6500 });
+  }, 5 * 60 * 1000);
+}
+
+function performLogout() {
+  state.token = null;
+  state.user = null;
+  state.userWorks = [];
+  state.availableWorks = [];
+  state.contractors = [];
+  state.contractorCatalog = [];
+  state.locations = [];
+  state.contractorFunctions = [];
+  state.causes = [];
+  state.holidays = [];
+  state.weeks = [];
+  state.tasks = [];
+  state.expectedTasks = [];
+  state.expectedEmailContractors = [];
+  state.qualityData = null;
+  state.ppcMeetingData = null;
+  state.selectedWorkId = null;
+  state.selectedWeekId = null;
+  state.currentRoles = new Set();
+  state.isAdmin = false;
+  state.weatherMiniPosition = null;
+  state.sheetDraftRows = [];
+  resetSaveReminderTicker();
+  $('#password').value = '';
+  $('#loginView').classList.remove('hidden');
+  $('#gatewayView').classList.add('hidden');
+  $('#appView').classList.add('hidden');
+  updateSessionInfo();
+  setStatus('Sessão encerrada.');
 }
 
 function closePlanningValidationModal() {
@@ -2130,12 +2210,15 @@ function refreshCurrentRoles() {
 }
 
 function updateSessionInfo() {
+  const logoutBtn = $('#logoutBtn');
   if (!state.user) {
     $('#sessionInfo').textContent = 'Sem sessão';
+    if (logoutBtn) logoutBtn.classList.add('hidden');
     return;
   }
   const roles = [...state.currentRoles].join(', ');
   $('#sessionInfo').textContent = `${state.user.name} (${roles || 'sem perfil'})`;
+  if (logoutBtn) logoutBtn.classList.remove('hidden');
 }
 
 function renderMainWorkSelect() {
@@ -2160,6 +2243,7 @@ function openGateway() {
   $('#loginView').classList.add('hidden');
   $('#appView').classList.add('hidden');
   $('#gatewayView').classList.remove('hidden');
+  resetSaveReminderTicker();
 
   $('#adminGateway').classList.toggle('hidden', !state.isAdmin);
   $('#nonAdminGateway').classList.toggle('hidden', state.isAdmin);
@@ -2785,6 +2869,24 @@ function zoneLevel1Names() {
     .sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
 
+function populateZoneLevel2ParentOptions(selectedValue = '') {
+  const select = $('#zoneLevel2Parent');
+  if (!select) return;
+  const previousSelected = String(selectedValue || select.value || '').trim();
+  const level1Names = zoneLevel1Names();
+  select.innerHTML = '<option value="">Selecione o Nível 1</option>';
+  level1Names.forEach((level1) => {
+    const option = document.createElement('option');
+    option.value = level1;
+    option.textContent = level1;
+    select.appendChild(option);
+  });
+  if (previousSelected && level1Names.includes(previousSelected)) {
+    select.value = previousSelected;
+  }
+  select.disabled = level1Names.length === 0;
+}
+
 function renderTaskLocationLevel2Options() {
   const level1 = $('#taskLocation1').value.trim();
   const level2Select = $('#taskLocation2');
@@ -2894,6 +2996,7 @@ function renderObraZoneamento() {
   });
 
   renderTaskLocationSelectors();
+  populateZoneLevel2ParentOptions();
   syncZoneLevel1FormMode();
   syncZoneLevel2FormMode();
   syncZoneLevel1EditModal();
@@ -3032,6 +3135,7 @@ function syncZoneLevel2FormMode() {
 function resetZoneLevel2Form() {
   state.editingZoneLevel2Id = null;
   $('#zoneLevel2Form').reset();
+  populateZoneLevel2ParentOptions();
   syncZoneLevel2FormMode();
 }
 
@@ -6759,7 +6863,15 @@ async function loadReferenceData() {
     state.ppcMeetingData = null;
     state.dashboardWeekId = null;
     state.dashboardWeekNumber = null;
-    state.contractors = [];
+    if (state.appMode === 'cadastros' && state.isAdmin) {
+      try {
+        state.contractors = await api('/global/contractors');
+      } catch {
+        state.contractors = [];
+      }
+    } else {
+      state.contractors = [];
+    }
     state.locations = [];
     state.causes = [];
     state.holidays = [];
@@ -6826,12 +6938,14 @@ async function loadReferenceData() {
     return;
   }
 
-  const contractorScopeQuery = state.appMode === 'obra' ? '?importedOnly=true' : '?generalOnly=true';
+  const contractorsEndpoint = state.appMode === 'cadastros'
+    ? '/global/contractors'
+    : `/works/${state.selectedWorkId}/contractors?importedOnly=true`;
   const taskGroupsEndpoint = state.appMode === 'cadastros'
     ? '/global/task-groups'
     : `/works/${state.selectedWorkId}/task-groups`;
   const [contractors, locations, causes, contractorFunctions, taskGroups, holidays, perceivedQualityConfig] = await Promise.all([
-    api(`/works/${state.selectedWorkId}/contractors${contractorScopeQuery}`),
+    api(contractorsEndpoint),
     api(`/works/${state.selectedWorkId}/locations`),
     api(`/works/${state.selectedWorkId}/causes`),
     api(`/works/${state.selectedWorkId}/contractor-functions`),
@@ -7198,6 +7312,7 @@ function selectTab(name) {
   const panelName = planningPanelNameForTab(name);
   $$('[data-tab]').forEach((button) => button.classList.toggle('active', button.dataset.tab === name));
   $$('.tab-panel').forEach((panel) => panel.classList.toggle('active', panel.dataset.tabPanel === panelName));
+  resetSaveReminderTicker();
   refreshNavigationVisibility();
   renderSideNavActiveState();
   syncPlanningModeUi();
@@ -7631,12 +7746,14 @@ async function handleContractorCreate(event) {
       functionName: contractorFunction,
     };
     const editingId = state.editingContractorId;
-    await api(editingId
-      ? `/works/${state.selectedWorkId}/contractors/${editingId}`
-      : `/works/${state.selectedWorkId}/contractors`, {
+    const contractorEndpoint = state.appMode === 'cadastros'
+      ? (editingId ? `/global/contractors/${editingId}` : '/global/contractors')
+      : (editingId ? `/works/${state.selectedWorkId}/contractors/${editingId}` : `/works/${state.selectedWorkId}/contractors`);
+    await api(contractorEndpoint, {
       method: editingId ? 'PUT' : 'POST',
       body: {
         ...payload,
+        workId: state.selectedWorkId || null,
       },
     });
     closeContractorModal();
@@ -8577,7 +8694,10 @@ async function handleContractorRowAction(event) {
   const contractorId = Number(deleteBtn.dataset.contractorDelete);
   if (!contractorId) return;
   try {
-    await api(`/works/${state.selectedWorkId}/contractors/${contractorId}`, { method: 'DELETE' });
+    const endpoint = state.appMode === 'cadastros'
+      ? `/global/contractors/${contractorId}`
+      : `/works/${state.selectedWorkId}/contractors/${contractorId}`;
+    await api(endpoint, { method: 'DELETE' });
     if (state.editingContractorId === contractorId) resetContractorForm();
     await loadReferenceData();
     setStatus('Empreiteiro excluído.');
@@ -11474,6 +11594,7 @@ function bindEvents() {
     });
   });
   $('#feedbackFilterClearBtn').addEventListener('click', resetFeedbackFilters);
+  $('#logoutBtn')?.addEventListener('click', performLogout);
   $$('[data-tab]').forEach((button) => button.addEventListener('click', () => selectTab(button.dataset.tab)));
 }
 
@@ -11500,3 +11621,4 @@ selectUserCadastroTab('users');
 selectObraCadastroTab('zoneamento');
 selectDashboardSubtab('relatorio');
 refreshNavigationVisibility();
+updateSessionInfo();

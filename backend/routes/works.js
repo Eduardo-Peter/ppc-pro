@@ -1281,6 +1281,255 @@ router.get('/works/:workId/contractors/catalog', authenticate, loadUser, require
     .filter((item) => !(Number(item.originWork?.id) === Number(req.workId) && item.selectedInWork === true)));
 }));
 
+router.get('/global/contractors', authenticate, loadUser, requireGlobalAdmin, asyncHandler(async (_req, res) => {
+  const rows = await prisma.contractor.findMany({
+    where: {},
+    include: {
+      function: true,
+      work: { select: { id: true, name: true } },
+    },
+    orderBy: [{ name: 'asc' }],
+  });
+
+  return res.json(rows
+    .filter((item) => !parseContractorContact(item.contact).sourceContractorId)
+    .filter((item) => !isHiddenWork(item.work))
+    .map((item) => ({
+      ...item,
+      ...parseContractorContact(item.contact),
+      laborType: item.function?.name || null,
+      originWork: item.work ? { id: item.work.id, name: item.work.name } : null,
+    })));
+}));
+
+router.post('/global/contractors', authenticate, loadUser, requireGlobalAdmin, asyncHandler(async (req, res) => {
+  const {
+    name,
+    contact,
+    notes,
+    supervisor,
+    communicationEmail,
+    email,
+    phone,
+    functionId,
+    functionName,
+    laborType,
+    workId,
+  } = req.body;
+  const normalizedName = String(name || '').trim();
+  const normalizedSupervisor = String(supervisor || '').trim();
+  const normalizedEmail = String(communicationEmail || email || '').trim();
+  const normalizedPhone = normalizePhone(phone);
+  const normalizedFunctionName = normalizeLaborTypeName(functionName || laborType || '');
+  if (!normalizedName || !normalizedSupervisor || !normalizedEmail || !normalizedPhone || !normalizedFunctionName) {
+    return res.status(400).json({ error: 'contractor_all_fields_required' });
+  }
+  if (!isValidPhoneWithDdd(normalizedPhone)) return res.status(400).json({ error: 'invalid_contractor_phone' });
+  const resolvedFunctionId = await resolveContractorFunctionId(functionId, normalizedFunctionName);
+  if (!resolvedFunctionId) return res.status(400).json({ error: 'contractor_function_required' });
+
+  let targetWorkId = parseIntId(workId);
+  if (targetWorkId) {
+    const targetWork = await prisma.work.findUnique({ where: { id: targetWorkId } });
+    if (!targetWork || isHiddenWork(targetWork)) targetWorkId = null;
+  }
+  if (!targetWorkId) {
+    const fallbackWork = await prisma.work.findFirst({
+      orderBy: { id: 'asc' },
+    });
+    if (!fallbackWork || isHiddenWork(fallbackWork)) {
+      const visibleWork = await prisma.work.findMany({ orderBy: { id: 'asc' } });
+      const firstVisible = visibleWork.find((item) => !isHiddenWork(item));
+      targetWorkId = firstVisible?.id || null;
+    } else {
+      targetWorkId = fallbackWork.id;
+    }
+  }
+  if (!targetWorkId) return res.status(400).json({ error: 'work_required' });
+
+  const item = await prisma.contractor.create({
+    data: {
+      workId: targetWorkId,
+      name: normalizedName,
+      contact: buildContractorContact({
+        supervisor: normalizedSupervisor,
+        communicationEmail: normalizedEmail,
+        phone: normalizedPhone,
+        notes,
+        contact,
+        isActive: true,
+        sourceContractorId: null,
+        selectedInWork: false,
+      }),
+      functionId: resolvedFunctionId,
+    },
+    include: {
+      function: true,
+      work: { select: { id: true, name: true } },
+    },
+  });
+
+  return res.status(201).json({
+    ...item,
+    ...parseContractorContact(item.contact),
+    laborType: item.function?.name || null,
+    originWork: item.work ? { id: item.work.id, name: item.work.name } : null,
+  });
+}));
+
+router.put('/global/contractors/:contractorId', authenticate, loadUser, requireGlobalAdmin, asyncHandler(async (req, res) => {
+  const contractorId = parseIntId(req.params.contractorId);
+  if (!contractorId) return res.status(400).json({ error: 'invalid_contractor_id' });
+
+  const existing = await prisma.contractor.findUnique({
+    where: { id: contractorId },
+    include: {
+      function: true,
+      work: { select: { id: true, name: true } },
+    },
+  });
+  if (!existing) return res.status(404).json({ error: 'contractor_not_found' });
+
+  const existingContact = parseContractorContact(existing.contact);
+  if (existingContact.sourceContractorId) {
+    return res.status(409).json({ error: 'contractor_not_found' });
+  }
+
+  const {
+    name,
+    contact,
+    notes,
+    supervisor,
+    communicationEmail,
+    email,
+    phone,
+    functionId,
+    functionName,
+    laborType,
+  } = req.body;
+
+  const finalName = String(name || '').trim() || existing.name;
+  const finalSupervisor = String((supervisor ?? existingContact.supervisor) || '').trim();
+  const finalEmail = String(((communicationEmail || email) ?? existingContact.communicationEmail) || '').trim();
+  const finalPhone = normalizePhone((phone ?? existingContact.phone) || '');
+  const finalFunctionName = normalizeLaborTypeName(functionName || laborType || existing.function?.name || '');
+  if (!finalName || !finalSupervisor || !finalEmail || !finalPhone || !finalFunctionName) {
+    return res.status(400).json({ error: 'contractor_all_fields_required' });
+  }
+  if (!isValidPhoneWithDdd(finalPhone)) return res.status(400).json({ error: 'invalid_contractor_phone' });
+
+  const resolvedFunctionId = await resolveContractorFunctionId(functionId, finalFunctionName);
+  if (!resolvedFunctionId) return res.status(400).json({ error: 'contractor_function_required' });
+
+  const updated = await prisma.contractor.update({
+    where: { id: contractorId },
+    data: {
+      name: finalName,
+      contact: buildContractorContact({
+        supervisor: finalSupervisor,
+        communicationEmail: finalEmail,
+        phone: finalPhone,
+        notes: notes ?? existingContact.notes,
+        contact,
+        isActive: existingContact.isActive,
+        sourceContractorId: existingContact.sourceContractorId,
+        selectedInWork: existingContact.selectedInWork,
+      }),
+      functionId: resolvedFunctionId,
+    },
+    include: {
+      function: true,
+      work: { select: { id: true, name: true } },
+    },
+  });
+
+  return res.json({
+    ...updated,
+    ...parseContractorContact(updated.contact),
+    laborType: updated.function?.name || null,
+    originWork: updated.work ? { id: updated.work.id, name: updated.work.name } : null,
+  });
+}));
+
+router.delete('/global/contractors/:contractorId', authenticate, loadUser, requireGlobalAdmin, asyncHandler(async (req, res) => {
+  const contractorId = parseIntId(req.params.contractorId);
+  if (!contractorId) return res.status(400).json({ error: 'invalid_contractor_id' });
+  const existing = await prisma.contractor.findUnique({
+    where: { id: contractorId },
+    include: { function: true },
+  });
+  if (!existing) return res.status(404).json({ error: 'contractor_not_found' });
+
+  const parsedExisting = parseContractorContact(existing.contact);
+  if (parsedExisting.sourceContractorId) {
+    return res.status(404).json({ error: 'contractor_not_found' });
+  }
+
+  const [taskCount, userCount, groupItemCount] = await Promise.all([
+    prisma.task.count({ where: { contractorId } }),
+    prisma.user.count({ where: { contractorId } }),
+    prisma.taskGroupItem.count({ where: { defaultContractorId: contractorId } }),
+  ]);
+
+  if (parsedExisting.selectedInWork) {
+    const deselected = await prisma.contractor.update({
+      where: { id: contractorId },
+      data: {
+        contact: buildContractorContact({
+          supervisor: parsedExisting.supervisor,
+          communicationEmail: parsedExisting.communicationEmail,
+          phone: parsedExisting.phone,
+          notes: parsedExisting.notes,
+          isActive: parsedExisting.isActive,
+          sourceContractorId: null,
+          selectedInWork: false,
+        }),
+      },
+      include: { function: true },
+    });
+    return res.json({
+      deselected: true,
+      contractor: {
+        ...deselected,
+        ...parseContractorContact(deselected.contact),
+        laborType: deselected.function?.name || null,
+      },
+    });
+  }
+
+  if (taskCount > 0) {
+    const archived = await prisma.contractor.update({
+      where: { id: contractorId },
+      data: {
+        contact: buildContractorContact({
+          supervisor: parsedExisting.supervisor,
+          communicationEmail: parsedExisting.communicationEmail,
+          phone: parsedExisting.phone,
+          notes: parsedExisting.notes,
+          isActive: false,
+          sourceContractorId: parsedExisting.sourceContractorId,
+          selectedInWork: parsedExisting.selectedInWork,
+        }),
+      },
+      include: { function: true },
+    });
+    return res.json({
+      archived: true,
+      contractor: {
+        ...archived,
+        ...parseContractorContact(archived.contact),
+        laborType: archived.function?.name || null,
+      },
+    });
+  }
+  if (userCount > 0 || groupItemCount > 0) {
+    return res.status(409).json({ error: 'contractor_in_use' });
+  }
+
+  await prisma.contractor.delete({ where: { id: contractorId } });
+  return res.status(204).send();
+}));
+
 router.post('/works/:workId/contractors/import', authenticate, loadUser, requireWorkRoles([ROLES.ADMIN, ROLES.ENGINEERING, ROLES.CONTROLLER], (req) => parseIntId(req.params.workId)), asyncHandler(async (req, res) => {
   const sourceContractorId = parseIntId(req.body.sourceContractorId);
   if (!sourceContractorId) return res.status(400).json({ error: 'source_contractor_required' });
