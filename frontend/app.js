@@ -132,6 +132,21 @@ const PT_WEEKDAY_FULL = {
   SUNDAY: 'Domingo',
 };
 
+const PT_MONTH_FULL = [
+  'Janeiro',
+  'Fevereiro',
+  'Março',
+  'Abril',
+  'Maio',
+  'Junho',
+  'Julho',
+  'Agosto',
+  'Setembro',
+  'Outubro',
+  'Novembro',
+  'Dezembro',
+];
+
 const BR_TIMEZONE_BY_UF = {
   AC: 'America/Rio_Branco',
   AL: 'America/Maceio',
@@ -4150,6 +4165,11 @@ function renderWeather() {
       inlineStrip.appendChild(item);
     }
   });
+  const inlineWrap = $('#planningWeatherInline');
+  if (inlineWrap) {
+    const stickyHeight = Math.max(58, Math.ceil(inlineWrap.offsetHeight || 58));
+    document.documentElement.style.setProperty('--planning-weather-sticky-height', `${stickyHeight}px`);
+  }
   applyPlanningHolidayHighlights();
   renderWeatherMiniThumb();
   renderPpcMeetingWeatherMini();
@@ -4187,6 +4207,87 @@ function renderPpcMeetingWeatherMini() {
       <small>${formatRainInfo(day.precipitationMm)}</small>
     `;
     strip.appendChild(item);
+  });
+}
+
+function renderPpcMeetingMiniCalendar() {
+  const host = $('#ppcMeetingMiniCalendar');
+  const input = $('#ppcMeetingDate');
+  if (!host || !input) return;
+  const week = ppcMeetingWeekContext();
+  if (!week) {
+    host.classList.add('hidden');
+    host.innerHTML = '';
+    return;
+  }
+  host.classList.remove('hidden');
+
+  const selectedDate = parseBrDate(input.value) || parseBrDate(formatDateBrLocalFromIso(new Date())) || new Date();
+  const baseDate = selectedDate instanceof Date ? selectedDate : new Date();
+  if (!state.ppcMeetingCalendarView || Number.isNaN(new Date(state.ppcMeetingCalendarView).getTime())) {
+    state.ppcMeetingCalendarView = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1).toISOString();
+  }
+  const viewDate = new Date(state.ppcMeetingCalendarView);
+  const viewYear = viewDate.getFullYear();
+  const viewMonth = viewDate.getMonth();
+  const firstDay = new Date(viewYear, viewMonth, 1);
+  const startOffset = (firstDay.getDay() + 6) % 7;
+  const gridStart = new Date(viewYear, viewMonth, 1 - startOffset);
+  const today = new Date();
+
+  const weekdayLabels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+  const days = [];
+  for (let i = 0; i < 42; i += 1) {
+    const dayDate = new Date(gridStart);
+    dayDate.setDate(gridStart.getDate() + i);
+    days.push(dayDate);
+  }
+
+  host.innerHTML = `
+    <div class="meeting-mini-calendar__header">
+      <div class="meeting-mini-calendar__title">${PT_MONTH_FULL[viewMonth]} ${viewYear}</div>
+      <div class="meeting-mini-calendar__nav">
+        <button type="button" data-calendar-nav="-1" aria-label="Mês anterior">‹</button>
+        <button type="button" data-calendar-nav="1" aria-label="Próximo mês">›</button>
+      </div>
+    </div>
+    <div class="meeting-mini-calendar__weekdays">
+      ${weekdayLabels.map((label) => `<span>${label}</span>`).join('')}
+    </div>
+    <div class="meeting-mini-calendar__grid">
+      ${days.map((dayDate) => {
+        const isOutside = dayDate.getMonth() !== viewMonth;
+        const isToday = dateKeyLocal(dayDate) === dateKeyLocal(today);
+        const isSelected = dateKeyLocal(dayDate) === dateKeyLocal(baseDate);
+        const cls = [
+          'meeting-mini-calendar__day',
+          isOutside ? 'is-outside' : '',
+          isToday ? 'is-today' : '',
+          isSelected ? 'is-selected' : '',
+        ].filter(Boolean).join(' ');
+        return `<button type="button" class="${cls}" data-calendar-date="${formatIsoDateInputFromValue(dayDate)}">${dayDate.getDate()}</button>`;
+      }).join('')}
+    </div>
+  `;
+
+  host.querySelectorAll('[data-calendar-nav]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const step = Number(btn.getAttribute('data-calendar-nav') || 0);
+      const nextView = new Date(viewYear, viewMonth + step, 1);
+      state.ppcMeetingCalendarView = nextView.toISOString();
+      renderPpcMeetingMiniCalendar();
+    });
+  });
+
+  host.querySelectorAll('[data-calendar-date]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const iso = btn.getAttribute('data-calendar-date') || '';
+      const picked = iso ? new Date(`${iso}T12:00:00`) : null;
+      if (!picked || Number.isNaN(picked.getTime())) return;
+      input.value = formatDateBrLocalFromIso(picked);
+      state.ppcMeetingCalendarView = new Date(picked.getFullYear(), picked.getMonth(), 1).toISOString();
+      renderPpcMeetingMiniCalendar();
+    });
   });
 }
 
@@ -4779,6 +4880,7 @@ function renderPpcMeetingTab() {
     if ($('#ppcMeetingWeatherStrip')) {
       $('#ppcMeetingWeatherStrip').innerHTML = '<div class="weather-inline-empty">Sem previsão para a semana selecionada.</div>';
     }
+    renderPpcMeetingMiniCalendar();
     if (closedInfoEl) closedInfoEl.textContent = '';
     if (checklistEl) checklistEl.innerHTML = '';
     return;
@@ -4794,6 +4896,11 @@ function renderPpcMeetingTab() {
     datePicker.value = formatIsoDateInputFromValue(dateSource);
     datePicker.disabled = closed || !prePlanningClosed;
   }
+  state.ppcMeetingCalendarView = (() => {
+    const parsed = parseBrDate(formatDateBrLocalFromIso(dateSource)) || parseBrDate(dateInput.value);
+    const base = parsed instanceof Date && !Number.isNaN(parsed.getTime()) ? parsed : new Date();
+    return new Date(base.getFullYear(), base.getMonth(), 1).toISOString();
+  })();
   minutesEl.value = String(meeting.minutes || '');
   dateInput.disabled = closed || !prePlanningClosed;
   timeInput.disabled = closed || !prePlanningClosed;
@@ -4829,6 +4936,7 @@ function renderPpcMeetingTab() {
 
   const rows = ppcMeetingContractorRows(meeting);
   renderPpcMeetingWeatherMini();
+  renderPpcMeetingMiniCalendar();
   if (checklistEl) {
     const dateFilled = Boolean(dateInput.value && timeInput.value);
     checklistEl.innerHTML = `<div class="ppc-checklist-grid">${[
@@ -11275,6 +11383,7 @@ function bindEvents() {
       const parsed = parseBrDate(input.value);
       picker.value = parsed ? formatIsoDateInputFromValue(parsed) : '';
     }
+    renderPpcMeetingMiniCalendar();
   });
   if ($('#ppcMeetingDatePicker')) {
     $('#ppcMeetingDatePicker').addEventListener('change', () => {
@@ -11283,10 +11392,12 @@ function bindEvents() {
       if (!picker || !input) return;
       if (!picker.value) {
         input.value = '';
+        renderPpcMeetingMiniCalendar();
         return;
       }
       const [year, month, day] = String(picker.value).split('-');
       input.value = `${day}/${month}/${year}`;
+      renderPpcMeetingMiniCalendar();
     });
   }
   $('#ppcMeetingTime').addEventListener('input', () => {

@@ -788,6 +788,139 @@ function parseTimeText(timeText, fallback = '00:00') {
   return { hour, minute };
 }
 
+function getDatePartsInTimeZone(dateInput, timeZone = 'America/Sao_Paulo') {
+  if (!dateInput) return null;
+  const date = new Date(dateInput);
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).formatToParts(date);
+    const map = {};
+    parts.forEach((part) => {
+      if (part.type !== 'literal') map[part.type] = part.value;
+    });
+    return {
+      year: Number(map.year || 0),
+      month: Number(map.month || 0),
+      day: Number(map.day || 0),
+      hour: Number(map.hour || 0),
+      minute: Number(map.minute || 0),
+      second: Number(map.second || 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function utcDateFromParts(year, month, day) {
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+}
+
+function addUtcDays(dateInput, days) {
+  const date = new Date(dateInput);
+  date.setUTCDate(date.getUTCDate() + Number(days || 0));
+  return date;
+}
+
+function nextMondayAfterUtcDate(dateInput) {
+  const date = new Date(dateInput);
+  const day = date.getUTCDay(); // 0=Dom, 1=Seg
+  let diff = (8 - day) % 7;
+  if (diff === 0) diff = 7;
+  date.setUTCDate(date.getUTCDate() + diff);
+  return date;
+}
+
+function calculateWeekPeriodByNumberInTimeZone(workStartDate, weekNumber, timeZone = 'America/Sao_Paulo') {
+  const startParts = getDatePartsInTimeZone(workStartDate, timeZone);
+  if (!startParts?.year || !startParts?.month || !startParts?.day) return null;
+  const normalizedWeekNumber = Math.max(1, Number.parseInt(weekNumber, 10) || 1);
+  const week1Start = utcDateFromParts(startParts.year, startParts.month, startParts.day);
+  let startDate = new Date(week1Start);
+
+  if (normalizedWeekNumber >= 2) {
+    const week2Start = nextMondayAfterUtcDate(week1Start);
+    startDate = addUtcDays(week2Start, (normalizedWeekNumber - 2) * 7);
+  }
+
+  let endDate;
+  if (normalizedWeekNumber === 1) {
+    endDate = new Date(startDate);
+    const toSaturday = (6 - endDate.getUTCDay() + 7) % 7;
+    endDate = addUtcDays(endDate, toSaturday);
+    const week2Start = nextMondayAfterUtcDate(week1Start);
+    if (endDate.getTime() >= week2Start.getTime()) {
+      endDate = addUtcDays(week2Start, -1);
+    }
+  } else {
+    endDate = addUtcDays(startDate, 5);
+  }
+
+  return { startDate, endDate };
+}
+
+function computeWeekDeadlineLocalParts(week, weekdayRule, timeRule, fallbackWeekday, fallbackTime, options = {}) {
+  const scope = String(options.scope || 'CURRENT_WEEK').toUpperCase();
+  const baseWeekNumber = Math.max(1, Number.parseInt(week?.weekNumber, 10) || 1);
+  let targetWeekNumber = baseWeekNumber;
+  if (scope === 'PREVIOUS_WEEK') targetWeekNumber = Math.max(1, baseWeekNumber - 1);
+  if (scope === 'NEXT_WEEK') targetWeekNumber = Math.max(1, baseWeekNumber + 1);
+
+  const timeZone = options.timeZone || inferBrazilTimeZoneFromWork(week?.work || week);
+  const workStartDate = week?.work?.startDate || week?.startDate;
+  const targetPeriod = calculateWeekPeriodByNumberInTimeZone(workStartDate, targetWeekNumber, timeZone);
+  if (!targetPeriod) return null;
+
+  const weekday = weekdayToJsIndex(weekdayRule) ?? weekdayToJsIndex(fallbackWeekday) ?? 5;
+  const { hour, minute } = parseTimeText(timeRule, fallbackTime);
+
+  let target = new Date(targetPeriod.startDate);
+  while (target.getTime() <= targetPeriod.endDate.getTime() && target.getUTCDay() !== weekday) {
+    target = addUtcDays(target, 1);
+  }
+  if (target.getTime() > targetPeriod.endDate.getTime()) {
+    target = new Date(targetPeriod.endDate);
+  }
+
+  return {
+    year: target.getUTCFullYear(),
+    month: target.getUTCMonth() + 1,
+    day: target.getUTCDate(),
+    hour,
+    minute,
+    second: 0,
+    timeZone,
+  };
+}
+
+function compareLocalDateTimeParts(a, b) {
+  if (!a || !b) return null;
+  const fields = ['year', 'month', 'day', 'hour', 'minute', 'second'];
+  for (const field of fields) {
+    const diff = Number(a[field] || 0) - Number(b[field] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+function formatDeadlineLocalPartsBr(parts) {
+  if (!parts) return '-';
+  const dd = String(parts.day).padStart(2, '0');
+  const mm = String(parts.month).padStart(2, '0');
+  const yyyy = String(parts.year);
+  const hh = String(parts.hour).padStart(2, '0');
+  const mi = String(parts.minute).padStart(2, '0');
+  return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
+}
+
 function startOfDayLocal(dateInput) {
   const date = new Date(dateInput);
   if (Number.isNaN(date.getTime())) return null;
@@ -1325,7 +1458,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
       }
     });
 
-    const considered = row.executed + row.started + row.notStarted;
+    const considered = row.executed + row.started + row.notStarted + row.cancelled;
     row.ppc = considered ? Number(((row.executed / considered) * 100).toFixed(2)) : 0;
     row.executedPlannedPct = row.planned ? Number(((row.executed / row.planned) * 100).toFixed(2)) : 0;
     row.nonExecuted = row.started + row.notStarted;
@@ -1418,12 +1551,12 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
 
     });
 
-    contractorWeekPpc.forEach((item) => {
-      const plannedBase = Number(item.plannedBase || 0);
+    contractorWeek.forEach((item, contractorName) => {
+      const plannedBase = Number(item.planned || 0);
       if (plannedBase <= 0) return;
-      const executedPlanned = Number(item.executedPlanned || 0);
+      const executedPlanned = Number(item.executed || 0);
       const executionPct = Number(((executedPlanned / plannedBase) * 100).toFixed(2));
-      const reliability = ensureContractorReliability(String(item.contractor || 'SEM EMPREITEIRO'));
+      const reliability = ensureContractorReliability(String(contractorName || 'SEM EMPREITEIRO'));
       reliability.weeksActive += 1;
       reliability.executionPctSum += executionPct;
       if (executionPct >= contractorReliabilityTargetPct) reliability.weeksAboveTarget += 1;
@@ -1466,16 +1599,16 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
       rowMonthPerf.weeks += 1;
     });
 
-    contractorWeekPpc.forEach((item) => {
-      const plannedBase = Number(item.plannedBase || 0);
+    contractorWeek.forEach((item, contractorName) => {
+      const plannedBase = Number(item.planned || 0);
       if (plannedBase <= 0) return;
-      const executedPlanned = Number(item.executedPlanned || 0);
+      const executedPlanned = Number(item.executed || 0);
       const executionPct = Number(((executedPlanned / plannedBase) * 100).toFixed(2));
       contractorPpcWeeklyRows.push({
         weekId: Number(week.id),
         weekNumber: Number(week.weekNumber),
-        contractorId: Number(item.contractorId || 0) || null,
-        contractor: item.contractor,
+        contractorId: null,
+        contractor: contractorName,
         plannedBase,
         executedPlanned,
         executionPct,
@@ -1550,7 +1683,8 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
     : 0;
   const ppcHistoryConsidered = Number(metrics?.totals?.executed || 0)
     + Number(metrics?.totals?.started || 0)
-    + Number(metrics?.totals?.notStarted || 0);
+    + Number(metrics?.totals?.notStarted || 0)
+    + Number(metrics?.totals?.cancelled || 0);
   const ppcHistoryAccumulatedPct = ppcHistoryConsidered > 0
     ? Number(((Number(metrics?.totals?.executed || 0) / ppcHistoryConsidered) * 100).toFixed(2))
     : 0;
@@ -1947,45 +2081,46 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
   };
 
   historyWeeks.forEach((week) => {
-    const prePlanningDeadline = computeWeekDeadlineDate(
+    const workTimeZone = inferBrazilTimeZoneFromWork(week.work || work);
+    const prePlanningDeadline = computeWeekDeadlineLocalParts(
       week,
       prePlanningDeadlineWeekday,
       prePlanningDeadlineTime,
       'WEDNESDAY',
       '17:00',
-      { scope: 'PREVIOUS_WEEK' },
+      { scope: 'PREVIOUS_WEEK', timeZone: workTimeZone },
     );
-    const ppcMeetingDeadline = computeWeekDeadlineDate(
+    const ppcMeetingDeadline = computeWeekDeadlineLocalParts(
       week,
       ppcMeetingDeadlineWeekday,
       ppcMeetingDeadlineTime,
       'THURSDAY',
       '17:00',
-      { scope: 'PREVIOUS_WEEK' },
+      { scope: 'PREVIOUS_WEEK', timeZone: workTimeZone },
     );
-    const planningDeadline = computeWeekDeadlineDate(
+    const planningDeadline = computeWeekDeadlineLocalParts(
       week,
       planningDeadlineWeekday,
       planningDeadlineTime,
       'FRIDAY',
       '15:00',
-      { scope: 'PREVIOUS_WEEK' },
+      { scope: 'PREVIOUS_WEEK', timeZone: workTimeZone },
     );
-    const feedbackDeadline = computeWeekDeadlineDate(
+    const feedbackDeadline = computeWeekDeadlineLocalParts(
       week,
       feedbackDeadlineWeekday,
       feedbackDeadlineTime,
       'FRIDAY',
       '17:00',
-        { scope: 'CURRENT_WEEK' },
+      { scope: 'CURRENT_WEEK', timeZone: workTimeZone },
     );
-    const qualityDeadline = computeWeekDeadlineDate(
+    const qualityDeadline = computeWeekDeadlineLocalParts(
       week,
       qualityDeadlineWeekday,
       qualityDeadlineTime,
       'SATURDAY',
       '17:00',
-        { scope: 'CURRENT_WEEK' },
+      { scope: 'CURRENT_WEEK', timeZone: workTimeZone },
     );
     const month = assignMonthForWeekByWorkdays(week);
     if (!monthlyGovernanceMap.has(month.monthKey)) {
@@ -2014,7 +2149,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
 
     if (prePlanningClosedAt) {
       governance.prePlanningClosedWeeks += 1;
-      if (prePlanningDeadline && new Date(prePlanningClosedAt).getTime() <= prePlanningDeadline.getTime()) {
+      if (prePlanningDeadline && compareLocalDateTimeParts(getDatePartsInTimeZone(prePlanningClosedAt, workTimeZone), prePlanningDeadline) <= 0) {
         governance.prePlanningOnTimeWeeks += 1;
       } else {
         governance.prePlanningLateWeeks += 1;
@@ -2023,7 +2158,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
 
     if (ppcMeetingClosedAt) {
       governance.ppcMeetingClosedWeeks += 1;
-      if (ppcMeetingDeadline && new Date(ppcMeetingClosedAt).getTime() <= ppcMeetingDeadline.getTime()) {
+      if (ppcMeetingDeadline && compareLocalDateTimeParts(getDatePartsInTimeZone(ppcMeetingClosedAt, workTimeZone), ppcMeetingDeadline) <= 0) {
         governance.ppcMeetingOnTimeWeeks += 1;
       } else {
         governance.ppcMeetingLateWeeks += 1;
@@ -2032,7 +2167,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
 
     if (planningClosedAt) {
       governance.planningClosedWeeks += 1;
-      if (planningDeadline && new Date(planningClosedAt).getTime() <= planningDeadline.getTime()) {
+      if (planningDeadline && compareLocalDateTimeParts(getDatePartsInTimeZone(planningClosedAt, workTimeZone), planningDeadline) <= 0) {
         governance.planningOnTimeWeeks += 1;
         monthlyGov.planningOnTime += 1;
       } else {
@@ -2043,7 +2178,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
 
     if (feedbackClosedAt) {
       governance.feedbackClosedWeeks += 1;
-      if (feedbackDeadline && new Date(feedbackClosedAt).getTime() <= feedbackDeadline.getTime()) {
+      if (feedbackDeadline && compareLocalDateTimeParts(getDatePartsInTimeZone(feedbackClosedAt, workTimeZone), feedbackDeadline) <= 0) {
         governance.feedbackOnTimeWeeks += 1;
         monthlyGov.feedbackOnTime += 1;
       } else {
@@ -2054,7 +2189,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
 
     if (qualityClosedAt) {
       governance.qualityClosedWeeks += 1;
-      if (qualityDeadline && new Date(qualityClosedAt).getTime() <= qualityDeadline.getTime()) {
+      if (qualityDeadline && compareLocalDateTimeParts(getDatePartsInTimeZone(qualityClosedAt, workTimeZone), qualityDeadline) <= 0) {
         governance.qualityOnTimeWeeks += 1;
       } else {
         governance.qualityLateWeeks += 1;
@@ -7127,12 +7262,24 @@ router.get('/works/:workId/dashboard/reports/last-week/pdf', authenticate, loadU
   drawSectionTitle('5 - GOVERNANÇA');
   drawSectionTitle('5.1 - CUMPRIMENTO DOS PRAZOS', rowH * 2);
 
-  const formatDelayInfo = (deadline, closedAt) => {
+  const formatDelayInfo = (deadlineParts, closedAt, timeZone) => {
     if (!closedAt) return { status: 'PENDING', text: 'Não fechado', sort: Number.POSITIVE_INFINITY };
-    if (!deadline) return { status: 'UNKNOWN', text: 'Sem prazo definido', sort: 0 };
-    const deltaMs = new Date(closedAt).getTime() - new Date(deadline).getTime();
-    if (!Number.isFinite(deltaMs)) return { status: 'UNKNOWN', text: 'Sem prazo definido', sort: 0 };
-    if (deltaMs <= 0) return { status: 'ONTIME', text: 'No prazo', sort: deltaMs };
+    if (!deadlineParts) return { status: 'UNKNOWN', text: 'Sem prazo definido', sort: 0 };
+    const closedParts = getDatePartsInTimeZone(closedAt, timeZone);
+    const cmp = compareLocalDateTimeParts(closedParts, deadlineParts);
+    if (!Number.isFinite(cmp)) return { status: 'UNKNOWN', text: 'Sem prazo definido', sort: 0 };
+    if (cmp <= 0) return { status: 'ONTIME', text: 'No prazo', sort: cmp };
+    const closedDate = new Date(closedAt);
+    const deadlineDate = new Date(Date.UTC(
+      deadlineParts.year,
+      deadlineParts.month - 1,
+      deadlineParts.day,
+      deadlineParts.hour,
+      deadlineParts.minute,
+      deadlineParts.second || 0,
+      0,
+    ));
+    const deltaMs = Math.max(0, closedDate.getTime() - deadlineDate.getTime());
     const totalMinutes = Math.floor(deltaMs / 60000);
     const days = Math.floor(totalMinutes / (24 * 60));
     const remMinutes = totalMinutes - (days * 24 * 60);
@@ -7141,82 +7288,82 @@ router.get('/works/:workId/dashboard/reports/last-week/pdf', authenticate, loadU
     return {
       status: 'LATE',
       text: `${days}d ${hours}h ${minutes}min`,
-      sort: deltaMs,
+      sort: cmp,
     };
   };
 
   const governanceRows = [
     {
       event: 'Fechamento Pré-programação da semana',
-      deadline: computeWeekDeadlineDate(
+      deadline: computeWeekDeadlineLocalParts(
         week,
         notificationRule?.prePlanningDeadlineWeekday,
         notificationRule?.prePlanningDeadlineTime,
         'WEDNESDAY',
         '17:00',
-        { scope: 'PREVIOUS_WEEK' },
+        { scope: 'PREVIOUS_WEEK', timeZone: tz },
       ),
       closedAt: week.prePlanningClosedAt || null,
       closedBy: String(week.prePlanningClosedBy?.name || '-'),
     },
     {
       event: 'Fechamento Lista de Presença + Ata de Reunião',
-      deadline: computeWeekDeadlineDate(
+      deadline: computeWeekDeadlineLocalParts(
         week,
         notificationRule?.ppcMeetingDeadlineWeekday,
         notificationRule?.ppcMeetingDeadlineTime,
         'THURSDAY',
         '17:00',
-        { scope: 'PREVIOUS_WEEK' },
+        { scope: 'PREVIOUS_WEEK', timeZone: tz },
       ),
       closedAt: ppcMeeting?.closedAt || week.ppcMeeting?.closedAt || null,
       closedBy: String(ppcMeeting?.closedBy?.name || week.ppcMeeting?.closedBy?.name || '-'),
     },
     {
       event: 'Fechamento Programação da semana',
-      deadline: computeWeekDeadlineDate(
+      deadline: computeWeekDeadlineLocalParts(
         week,
         notificationRule?.planningDeadlineWeekday,
         notificationRule?.planningDeadlineTime,
         'FRIDAY',
         '15:00',
-        { scope: 'PREVIOUS_WEEK' },
+        { scope: 'PREVIOUS_WEEK', timeZone: tz },
       ),
       closedAt: week.planningClosedAt || null,
       closedBy: String(week.planningClosedBy?.name || '-'),
     },
     {
       event: 'Fechamento Feedback da semana',
-      deadline: computeWeekDeadlineDate(
+      deadline: computeWeekDeadlineLocalParts(
         week,
         notificationRule?.feedbackDeadlineWeekday,
         notificationRule?.feedbackDeadlineTime,
         'FRIDAY',
         '17:00',
-      { scope: 'CURRENT_WEEK' },
+        { scope: 'CURRENT_WEEK', timeZone: tz },
       ),
       closedAt: week.feedbackClosedAt || null,
       closedBy: String(week.feedbackClosedBy?.name || '-'),
     },
     {
       event: 'Fechamento Qualidade percebida da semana',
-      deadline: computeWeekDeadlineDate(
+      deadline: computeWeekDeadlineLocalParts(
         week,
         notificationRule?.qualityDeadlineWeekday,
         notificationRule?.qualityDeadlineTime,
         'SATURDAY',
         '17:00',
-      { scope: 'CURRENT_WEEK' },
+        { scope: 'CURRENT_WEEK', timeZone: tz },
       ),
       closedAt: week.qualityClosedAt || null,
       closedBy: String(week.qualityClosedBy?.name || '-'),
     },
   ].map((row) => {
-    const delay = formatDelayInfo(row.deadline, row.closedAt);
+    const delay = formatDelayInfo(row.deadline, row.closedAt, tz);
     return {
       ...row,
       delay,
-      deadlineText: row.deadline ? formatDateTimeBrInTimeZone(row.deadline, tz) : '-',
+      deadlineText: formatDeadlineLocalPartsBr(row.deadline),
       closedAtText: row.closedAt ? formatDateTimeBrInTimeZone(row.closedAt, tz) : '-',
     };
   });

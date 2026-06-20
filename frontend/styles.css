@@ -1881,13 +1881,26 @@ th {
   table-layout: fixed;
 }
 
+.plan-table-weather-inline {
+  position: sticky;
+  top: 0;
+  z-index: 9;
+  margin-bottom: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  background: #eef7ff;
+  min-height: 58px;
+}
+
 .plan-table thead th {
   background: #dcebf7;
 }
 
 .plan-table thead tr:nth-child(1) th {
   position: sticky;
-  top: 0;
+  top: var(--planning-weather-sticky-height, 58px);
   z-index: 8;
 }
 
@@ -2108,6 +2121,143 @@ th {
   gap: 8px;
 }
 
+.weather-inline-strip {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  align-items: stretch;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.weather-inline-strip--meeting {
+  margin-top: 10px;
+}
+
+.meeting-mini-calendar {
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8fcff;
+  padding: 10px;
+  max-width: 320px;
+}
+
+.meeting-mini-calendar.hidden {
+  display: none;
+}
+
+.meeting-mini-calendar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.meeting-mini-calendar__title {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.meeting-mini-calendar__nav {
+  display: flex;
+  gap: 6px;
+}
+
+.meeting-mini-calendar__nav button {
+  min-width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.meeting-mini-calendar__weekdays,
+.meeting-mini-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.meeting-mini-calendar__weekdays {
+  margin-bottom: 4px;
+}
+
+.meeting-mini-calendar__weekdays span {
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.meeting-mini-calendar__day {
+  min-height: 34px;
+  border-radius: 8px;
+  border: 1px solid #d8e4ed;
+  background: #ffffff;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-family: inherit;
+}
+
+.meeting-mini-calendar__day.is-outside {
+  color: #9aa9b6;
+  background: #f5f8fb;
+}
+
+.meeting-mini-calendar__day.is-today {
+  border-color: #2b79c2;
+}
+
+.meeting-mini-calendar__day.is-selected {
+  background: #0f74b8;
+  border-color: #0f74b8;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.weather-inline-item {
+  min-width: 116px;
+  border: 1px solid #cfe1ee;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 6px 8px;
+  display: grid;
+  gap: 2px;
+  color: #23495f;
+  text-align: center;
+  flex: 0 0 auto;
+}
+
+.weather-inline-item strong {
+  font-size: 0.72rem;
+  line-height: 1.05;
+}
+
+.weather-inline-item small {
+  font-size: 0.66rem;
+  line-height: 1.1;
+}
+
+.weather-inline-item.is-holiday {
+  background: #fff2f2;
+  border-color: #e3a3a3;
+}
+
+.weather-inline-empty {
+  width: 100%;
+  padding: 6px 4px;
+  text-align: center;
+  color: #607787;
+  font-size: 0.74rem;
+}
+
 .weather-card {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -2188,6 +2338,17 @@ th {
   background: rgba(242, 251, 255, 0.97);
   box-shadow: 0 8px 20px rgba(19, 54, 77, 0.2);
   padding: 8px 10px;
+}
+
+.work-modal-input--split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px;
+  gap: 8px;
+  align-items: center;
+}
+
+.work-modal-input--picker {
+  min-width: 0;
 }
 
 .weather-mini-thumb.is-draggable {
