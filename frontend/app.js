@@ -54,6 +54,8 @@ const state = {
   workTimeZoneByWorkId: {},
   deadlineCountdownTimer: null,
   saveReminderTimer: null,
+  keepaliveTimer: null,
+  autosaveTimer: null,
   editingUserId: null,
   editingUserWorkIds: [],
   editingPermissionProfileId: null,
@@ -65,6 +67,11 @@ const state = {
   appConfig: null,
   closeFeedbackPending: false,
   weekSheetSaveInProgress: false,
+  feedbackSaveInProgress: false,
+  qualitySaveInProgress: false,
+  planningDirty: false,
+  feedbackDirty: false,
+  qualityDirty: false,
   weatherMiniObserver: null,
   weatherStripVisible: true,
   weatherMiniPosition: null,
@@ -264,17 +271,135 @@ function shouldShowSaveReminder(tabName = activeTabName()) {
   return ['preprogramacao', 'programacao', 'feedback', 'qualidade'].includes(String(tabName || ''));
 }
 
+function markScreenDirty(scope) {
+  if (scope === 'planning') state.planningDirty = true;
+  if (scope === 'feedback') state.feedbackDirty = true;
+  if (scope === 'quality') state.qualityDirty = true;
+}
+
+function clearScreenDirty(scope) {
+  if (scope === 'planning') state.planningDirty = false;
+  if (scope === 'feedback') state.feedbackDirty = false;
+  if (scope === 'quality') state.qualityDirty = false;
+}
+
+function shouldRunKeepalive() {
+  return Boolean(
+    state.user
+    && $('#appView')
+    && !$('#appView').classList.contains('hidden')
+    && document.visibilityState === 'visible',
+  );
+}
+
+async function sendKeepalivePing() {
+  if (!shouldRunKeepalive()) return;
+  try {
+    await fetch(`/health?_=${Date.now()}`, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  } catch {
+    // keepalive não deve interromper o fluxo da interface
+  }
+}
+
+function planningCanEditNow() {
+  const week = activeWeek();
+  const statusField = planningModeStatusField();
+  const weekOpen = String(week?.[statusField] || '').toUpperCase() === 'OPEN';
+  return hasAnyRole(EDIT_ROLES)
+    && weekOpen
+    && (isPrePlanningMode() || String(week?.ppcMeeting?.isClosed || '').toLowerCase() === 'true');
+}
+
+function feedbackCanEditNow() {
+  const week = feedbackWeekSelected();
+  return hasAnyRole(EDIT_ROLES)
+    && String(week?.planningStatus || '').toUpperCase() === 'CLOSED'
+    && String(week?.feedbackStatus || '').toUpperCase() !== 'CLOSED';
+}
+
+function qualityCanEditNow() {
+  return canEditQualityWeek(qualityWeekSelected());
+}
+
+function shouldRunAutosave(tabName = activeTabName()) {
+  if (!state.user || document.visibilityState !== 'visible') return false;
+  return ['preprogramacao', 'programacao', 'feedback', 'qualidade'].includes(String(tabName || ''));
+}
+
+function autosaveScopeFromActiveTab(tabName = activeTabName()) {
+  const normalized = String(tabName || '');
+  if (normalized === 'preprogramacao' || normalized === 'programacao') return 'planning';
+  if (normalized === 'feedback') return 'feedback';
+  if (normalized === 'qualidade') return 'quality';
+  return null;
+}
+
+function isAutosaveNeeded(scope) {
+  if (scope === 'planning') return state.planningDirty && planningCanEditNow() && !state.weekSheetSaveInProgress;
+  if (scope === 'feedback') return state.feedbackDirty && feedbackCanEditNow() && !state.feedbackSaveInProgress;
+  if (scope === 'quality') return state.qualityDirty && qualityCanEditNow() && !state.qualitySaveInProgress;
+  return false;
+}
+
+async function runAutosaveForActiveTab() {
+  const scope = autosaveScopeFromActiveTab();
+  if (!scope || !isAutosaveNeeded(scope)) return;
+  if (scope === 'planning') {
+    await handleSaveWeekSheet({ autosave: true, silentSuccess: true });
+    return;
+  }
+  if (scope === 'feedback') {
+    await handleFeedback(null, { autosave: true, silentSuccess: true });
+    return;
+  }
+  if (scope === 'quality') {
+    await handleQualitySave({ autosave: true, silentSuccess: true });
+  }
+}
+
+function resetKeepaliveTicker() {
+  if (state.keepaliveTimer) {
+    window.clearInterval(state.keepaliveTimer);
+    state.keepaliveTimer = null;
+  }
+  if (!shouldRunKeepalive()) return;
+  state.keepaliveTimer = window.setInterval(() => {
+    sendKeepalivePing();
+  }, 4 * 60 * 1000);
+}
+
+function resetAutosaveTicker() {
+  if (state.autosaveTimer) {
+    window.clearInterval(state.autosaveTimer);
+    state.autosaveTimer = null;
+  }
+  if (document.hidden) return;
+  if (!shouldRunAutosave()) return;
+  state.autosaveTimer = window.setInterval(() => {
+    runAutosaveForActiveTab().catch(() => {
+      // falha de autosave não pode travar a navegação
+    });
+  }, 2 * 60 * 1000);
+}
+
 function resetSaveReminderTicker() {
   if (state.saveReminderTimer) {
     window.clearInterval(state.saveReminderTimer);
     state.saveReminderTimer = null;
   }
-  if (!shouldShowSaveReminder()) return;
-  state.saveReminderTimer = window.setInterval(() => {
-    const message = reminderMessageForTab();
-    if (!message || !shouldShowSaveReminder()) return;
-    showToast(message, { kind: 'reminder', durationMs: 6500 });
-  }, 5 * 60 * 1000);
+  if (shouldShowSaveReminder()) {
+    state.saveReminderTimer = window.setInterval(() => {
+      const message = reminderMessageForTab();
+      if (!message || !shouldShowSaveReminder()) return;
+      showToast(message, { kind: 'reminder', durationMs: 6500 });
+    }, 5 * 60 * 1000);
+  }
+  resetKeepaliveTicker();
+  resetAutosaveTicker();
 }
 
 function performLogout() {
@@ -294,6 +419,12 @@ function performLogout() {
   state.expectedEmailContractors = [];
   state.qualityData = null;
   state.ppcMeetingData = null;
+  state.planningDirty = false;
+  state.feedbackDirty = false;
+  state.qualityDirty = false;
+  state.weekSheetSaveInProgress = false;
+  state.feedbackSaveInProgress = false;
+  state.qualitySaveInProgress = false;
   state.selectedWorkId = null;
   state.selectedWeekId = null;
   state.currentRoles = new Set();
@@ -434,6 +565,91 @@ function closePlanningSaveProgressModal() {
   if (!modal) return;
   modal.classList.add('hidden');
   updatePlanningSaveProgress(0, 'Preparando salvamento...');
+}
+
+function toggleTemporaryDisabled(elements, disabled, stateKey) {
+  elements.forEach((el) => {
+    if (!el) return;
+    if (disabled) {
+      if (!Object.prototype.hasOwnProperty.call(el.dataset, stateKey)) {
+        el.dataset[stateKey] = el.disabled ? '1' : '0';
+      }
+      el.disabled = true;
+      return;
+    }
+    if (!Object.prototype.hasOwnProperty.call(el.dataset, stateKey)) return;
+    el.disabled = el.dataset[stateKey] === '1';
+    delete el.dataset[stateKey];
+  });
+}
+
+function setPlanningSavingLock(locked, message = 'Salvando planilha...') {
+  const elements = [
+    ...$$('#tasksBody input, #tasksBody select, #tasksBody textarea, #tasksBody button'),
+    $('#saveWeekSheetBtn'),
+    $('#addRow1Btn'),
+    $('#addRow3Btn'),
+    $('#addRow5Btn'),
+    $('#addRowCustomQty'),
+    $('#addRowCustomBtn'),
+    $('#importGroupSource'),
+    $('#importGroupSelect'),
+    $('#importGroupBtn'),
+    $('#exportWeekExcelBtn'),
+    $('#importWeekExcelBtn'),
+    $('#exportWeekTxtBtn'),
+    $('#importWeekTxtBtn'),
+    $('#weekRefreshBtn'),
+    $('#openWeekBtn'),
+    $('#closePlanningBtn'),
+    $('#reopenBtn'),
+  ];
+  toggleTemporaryDisabled(elements, locked, 'savedisabledPlanning');
+  const panel = $('#tasksBody')?.closest('.panel');
+  if (panel) panel.classList.toggle('panel-saving', locked);
+  if (locked) panel?.setAttribute('aria-busy', 'true');
+  else panel?.removeAttribute('aria-busy');
+  if (locked) updatePlanningSaveProgress(8, message);
+}
+
+function setFeedbackSavingLock(locked) {
+  const elements = [
+    ...$$('#feedbackTasksBody input, #feedbackTasksBody select, #feedbackTasksBody textarea, #feedbackTasksBody button'),
+    ...$$('#feedbackNewTaskForm input, #feedbackNewTaskForm select, #feedbackNewTaskForm textarea, #feedbackNewTaskForm button'),
+    $('#saveFeedbackInlineBtn'),
+    $('#closeFeedbackWeekBtn'),
+    $('#reopenFeedbackWeekBtn'),
+    $('#feedbackBulkExecutedBtn'),
+    $('#feedbackBulkStartedBtn'),
+    $('#feedbackBulkNotStartedBtn'),
+    $('#feedbackComparisonPdfBtn'),
+    $('#feedbackWeekRefreshBtn'),
+  ];
+  toggleTemporaryDisabled(elements, locked, 'savedisabledFeedback');
+  const panel = $('#feedbackTasksBody')?.closest('.panel');
+  if (panel) panel.classList.toggle('panel-saving', locked);
+  if (panel && locked) panel.setAttribute('aria-busy', 'true');
+  if (panel && !locked) panel.removeAttribute('aria-busy');
+}
+
+function setQualitySavingLock(locked) {
+  const elements = [
+    ...$$('#qualityBody input, #qualityBody textarea, #qualityBody button'),
+    $('#saveQualityBtn'),
+    $('#closeQualityWeekBtn'),
+    $('#reopenQualityWeekBtn'),
+    $('#qualityWeekRefreshBtn'),
+    $('#qualityWeekPdfBtn'),
+  ];
+  toggleTemporaryDisabled(elements, locked, 'savedisabledQuality');
+  const panel = $('#qualityBody')?.closest('.panel');
+  if (panel) panel.classList.toggle('panel-saving', locked);
+  if (panel && locked) panel.setAttribute('aria-busy', 'true');
+  if (panel && !locked) panel.removeAttribute('aria-busy');
+}
+
+function handleQualityGridChange() {
+  markScreenDirty('quality');
 }
 
 function translateApiError(errorCodeOrMessage, fallbackPrefix = 'Erro') {
@@ -4490,6 +4706,7 @@ async function addSheetDraftRows(count) {
     });
   }
   normalizeDraftSequenceNumbers();
+  markScreenDirty('planning');
   renderTasks();
   setStatus(`${qty} linha(s) em branco adicionada(s) na planilha.`);
 }
@@ -5467,6 +5684,7 @@ function handleFeedbackGridChange(event) {
   const row = event.target.closest('#feedbackTasksBody tr[data-task-id]');
   if (!row) return;
   row.dataset.dirty = '1';
+  markScreenDirty('feedback');
   const statusSelect = row.querySelector('.fb-status');
   const groupSelect = row.querySelector('.fb-cause-group');
   const causeSelect = row.querySelector('.fb-cause');
@@ -6182,11 +6400,15 @@ async function refreshQualityTab(options = {}) {
   state.qualityWeekNumber = week.weekNumber;
   state.qualityData = data || null;
   renderQualityTable(state.qualityData);
+  clearScreenDirty('quality');
   if (!silent) setStatus(`Qualidade Percebida atualizada. Semana considerada ${week.weekNumber}.`);
 }
 
-async function handleQualitySave() {
+async function handleQualitySave(options = {}) {
+  if (state.qualitySaveInProgress) return false;
   try {
+    state.qualitySaveInProgress = true;
+    setQualitySavingLock(true);
     const week = qualityWeekSelected();
     if (!week?.id) {
       setStatus('Selecione uma semana válida na aba Qualidade Percebida.', true);
@@ -6214,11 +6436,24 @@ async function handleQualitySave() {
     });
     state.qualityData = saved || null;
     renderQualityTable(state.qualityData);
-    setStatus(`Qualidade Percebida da Semana ${week.weekNumber} salva.`);
+    clearScreenDirty('quality');
+    if (options.autosave) {
+      showToast('Rascunho da qualidade percebida salvo automaticamente.', { kind: 'success', durationMs: 3200 });
+    } else {
+      setStatus(`Qualidade Percebida da Semana ${week.weekNumber} salva.`);
+    }
     return true;
   } catch (error) {
-    setStatus(translateApiError(error.message, 'Erro ao salvar Qualidade Percebida'), true);
+    const message = translateApiError(error.message, 'Erro ao salvar Qualidade Percebida');
+    if (options.autosave) {
+      showToast(message, { kind: 'reminder', durationMs: 5200 });
+    } else {
+      setStatus(message, true);
+    }
     return false;
+  } finally {
+    state.qualitySaveInProgress = false;
+    setQualitySavingLock(false);
   }
 }
 
@@ -9525,6 +9760,7 @@ async function refreshFeedbackTab(options = {}) {
   }
 
   await loadTasksAndDashboard();
+  clearScreenDirty('feedback');
   syncFeedbackComparisonPdfButton();
   if (!silent) setStatus(`Feedback carregado. Semana considerada ${week.weekNumber}.`);
 }
@@ -10343,13 +10579,16 @@ async function handleFeedbackTaskAction(event) {
   }
 }
 
-async function handleFeedback(event) {
-  event.preventDefault();
-  if (!state.selectedWeekId) return;
-  const closeWeekRequested = state.closeFeedbackPending === true;
+async function handleFeedback(event, options = {}) {
+  if (event?.preventDefault) event.preventDefault();
+  if (state.feedbackSaveInProgress) return false;
+  if (!state.selectedWeekId) return false;
+  const closeWeekRequested = options.closeWeekRequested === true || state.closeFeedbackPending === true;
   state.closeFeedbackPending = false;
-  closeFeedbackValidationModal();
+  if (!options.autosave) closeFeedbackValidationModal();
   try {
+    state.feedbackSaveInProgress = true;
+    setFeedbackSavingLock(true);
     const week = activeWeek();
     if (!week) throw new Error('Semana não selecionada.');
     if (String(week.planningStatus || '').toUpperCase() !== 'CLOSED') {
@@ -10444,10 +10683,21 @@ async function handleFeedback(event) {
     const feedbackWeekInput = $('#feedbackWeekNumber');
     if (feedbackWeekInput) feedbackWeekInput.value = String(week.weekNumber || '');
     await refreshFeedbackTab({ useDefaultPrevious: false, silent: true });
-    closeFeedbackValidationModal();
-    setStatus(closeWeekRequested ? 'Feedback salvo e semana fechada para feedback.' : 'Feedback salvo.');
+    clearScreenDirty('feedback');
+    if (!options.autosave) closeFeedbackValidationModal();
+    if (options.autosave) {
+      showToast('Rascunho do feedback salvo automaticamente.', { kind: 'success', durationMs: 3200 });
+    } else {
+      setStatus(closeWeekRequested ? 'Feedback salvo e semana fechada para feedback.' : 'Feedback salvo.');
+    }
+    return true;
   } catch (error) {
     state.closeFeedbackPending = false;
+    if (options.autosave) {
+      const message = translateApiError(error.message, 'Autosalvamento do feedback pausado');
+      showToast(message, { kind: 'reminder', durationMs: 5200 });
+      return false;
+    }
     if (String(error.message).startsWith('cause_required_rows:')) {
       const rows = String(error.message).split(':')[1] || '';
       openFeedbackValidationModal(
@@ -10471,6 +10721,10 @@ async function handleFeedback(event) {
       [translateApiError(error.message, 'Falha ao salvar feedback')],
     );
     setStatus(translateApiError(error.message, 'Erro ao salvar feedback'), true);
+    return false;
+  } finally {
+    state.feedbackSaveInProgress = false;
+    setFeedbackSavingLock(false);
   }
 }
 
@@ -10978,14 +11232,15 @@ function syncDraftStateFromRow(row) {
   draft.plannedDays = [...row.querySelectorAll('.sheet-day:checked')].map((input) => ({ weekday: input.dataset.weekday }));
 }
 
-async function handleSaveWeekSheet() {
+async function handleSaveWeekSheet(options = {}) {
   if (state.weekSheetSaveInProgress) return;
   try {
     state.weekSheetSaveInProgress = true;
+    setPlanningSavingLock(true, options.autosave ? 'Autosalvando planilha...' : 'Validando planilha...');
     const preMode = isPrePlanningMode();
     const saveBtn = $('#saveWeekSheetBtn');
     if (saveBtn) saveBtn.disabled = true;
-    openPlanningSaveProgressModal(3, 'Validando planilha...');
+    openPlanningSaveProgressModal(3, options.autosave ? 'Autosalvando planilha...' : 'Validando planilha...');
     const targetWeek = await syncSelectedWeekFromWeekFieldIfNeeded();
     if (!targetWeek?.id) {
       setStatus('Selecione uma semana para salvar a programação.', true);
@@ -11135,25 +11390,38 @@ async function handleSaveWeekSheet() {
     await loadTasksAndDashboard();
     updatePlanningSaveProgress(100, 'Salvamento concluído.');
     const successMessage = `${preMode ? 'Pré-programação semanal' : 'Programação semanal'} salva. ${createdCount} linha(s) criada(s) e ${updatedCount} linha(s) atualizada(s).`;
-    setStatus(successMessage);
-    openPlanningValidationModal(
-      `Salvamento da planilha de ${preMode ? 'pré-programação' : 'programação'} concluído com sucesso.`,
-      [],
-      { title: 'Programação Semanal Salva' },
-    );
+    clearScreenDirty('planning');
+    if (options.autosave) {
+      showToast(`Rascunho da ${preMode ? 'pré-programação' : 'programação'} salvo automaticamente.`, {
+        kind: 'success',
+        durationMs: 3200,
+      });
+    } else {
+      setStatus(successMessage);
+      openPlanningValidationModal(
+        `Salvamento da planilha de ${preMode ? 'pré-programação' : 'programação'} concluído com sucesso.`,
+        [],
+        { title: 'Programação Semanal Salva' },
+      );
+    }
   } catch (error) {
     const errorMessage = translateApiError(error.message, 'Erro ao salvar a planilha da semana');
-    setStatus(errorMessage, true);
-    openPlanningValidationModal(
-      errorMessage,
-      [],
-      { title: 'Falha no Salvamento' },
-    );
+    if (options.autosave) {
+      showToast(`Autosalvamento pausado: ${errorMessage}`, { kind: 'reminder', durationMs: 5200 });
+    } else {
+      setStatus(errorMessage, true);
+      openPlanningValidationModal(
+        errorMessage,
+        [],
+        { title: 'Falha no Salvamento' },
+      );
+    }
   } finally {
     window.setTimeout(() => {
       closePlanningSaveProgressModal();
     }, 250);
     state.weekSheetSaveInProgress = false;
+    setPlanningSavingLock(false);
     const saveBtn = $('#saveWeekSheetBtn');
     if (saveBtn) {
       const week = activeWeek();
@@ -11178,6 +11446,7 @@ async function deleteSheetTask(taskId) {
 function removeSheetDraft(draftId) {
   state.sheetDraftRows = state.sheetDraftRows.filter((item) => item.draftId !== draftId);
   normalizeDraftSequenceNumbers();
+  markScreenDirty('planning');
   renderTasks();
   setStatus('Linha de rascunho removida.');
 }
@@ -11228,6 +11497,7 @@ async function handleImportGroupToWeek() {
       });
     });
     normalizeDraftSequenceNumbers();
+    markScreenDirty('planning');
     renderTasks();
     setStatus(`Grupo carregado na planilha (${items.length} linha(s)).`);
   } catch (error) {
@@ -11290,6 +11560,7 @@ async function handleTaskAction(event) {
 function handleTaskTableChange(event) {
   const row = sheetRowElementFromEventTarget(event.target);
   if (!row) return;
+  markScreenDirty('planning');
 
   if (event.target.classList.contains('sheet-day')) {
     syncSheetRowDatesFromDayCheckboxes(row);
@@ -11726,6 +11997,8 @@ function bindEvents() {
   $('#feedbackTasksBody').addEventListener('click', handleFeedbackTaskAction);
   $('#feedbackTasksBody').addEventListener('change', handleFeedbackGridChange);
   $('#feedbackTasksBody').addEventListener('input', handleFeedbackGridChange);
+  $('#qualityBody').addEventListener('change', handleQualityGridChange);
+  $('#qualityBody').addEventListener('input', handleQualityGridChange);
   $('#feedbackNewTaskForm').addEventListener('submit', handleFeedbackNewTaskCreate);
   $('#feedbackBulkExecutedBtn').addEventListener('click', () => applyFeedbackBulkStatus('EXECUTED'));
   $('#feedbackBulkStartedBtn').addEventListener('click', () => applyFeedbackBulkStatus('STARTED'));
@@ -11783,6 +12056,9 @@ function bindEvents() {
   $('#closeFeedbackValidationBtn').addEventListener('click', closeFeedbackValidationModal);
   $('#feedbackValidationModal').addEventListener('click', (event) => {
     if (event.target.id === 'feedbackValidationModal') closeFeedbackValidationModal();
+  });
+  document.addEventListener('visibilitychange', () => {
+    resetSaveReminderTicker();
   });
   $('#addRow1Btn').addEventListener('click', () => addSheetDraftRows(1).catch((error) => setStatus(`Erro ao adicionar linha: ${error.message}`, true)));
   $('#addRow3Btn').addEventListener('click', () => addSheetDraftRows(3).catch((error) => setStatus(`Erro ao adicionar linhas: ${error.message}`, true)));

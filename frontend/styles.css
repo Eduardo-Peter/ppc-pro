@@ -2718,6 +2718,15 @@ footer.status-error {
   pointer-events: none;
 }
 
+.panel-saving {
+  opacity: 0.78;
+  transition: opacity 0.18s ease;
+}
+
+.panel-saving * {
+  cursor: progress !important;
+}
+
 .toast-message {
   border-radius: 14px;
   border: 1px solid rgba(18, 49, 62, 0.12);
