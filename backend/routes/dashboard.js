@@ -932,13 +932,18 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
     String(week?.feedbackStatus || '').toUpperCase() === WEEK_STATUS.CLOSED
     || !!week?.feedbackClosedAt
   );
+  const isQualityClosed = (week) => (
+    String(week?.qualityStatus || '').toUpperCase() === WEEK_STATUS.CLOSED
+    || !!week?.qualityClosedAt
+  );
+  const isHistoricallyClosed = (week) => isFeedbackClosed(week) && isQualityClosed(week);
 
   const requestedWeek = selectedWeekNumber
     ? allWeeks.find((item) => Number(item.weekNumber) === Number(selectedWeekNumber))
     : allWeeks[allWeeks.length - 1];
   if (!requestedWeek) return null;
 
-  const closedWeeks = allWeeks.filter((item) => isFeedbackClosed(item));
+  const closedWeeks = allWeeks.filter((item) => isHistoricallyClosed(item));
   let selectedWeek = closedWeeks
     .filter((item) => Number(item.weekNumber) <= Number(requestedWeek.weekNumber))
     .at(-1) || null;
@@ -951,7 +956,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
   if (!historyWeeks.length) return null;
 
   const weeksUpToRequested = allWeeks.filter((item) => Number(item.weekNumber) <= Number(requestedWeek.weekNumber));
-  const excludedWeeks = weeksUpToRequested.filter((item) => !isFeedbackClosed(item));
+  const excludedWeeks = weeksUpToRequested.filter((item) => !isHistoricallyClosed(item));
 
   const firstWeek = historyWeeks[0];
   const weekIds = historyWeeks.map((item) => Number(item.id));
@@ -1407,12 +1412,17 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
       itemMonth.cancelled += cancelled;
       itemMonth.unplannedExecuted += unplannedExecuted;
 
-      if (planned > 0) {
-        const reliability = ensureContractorReliability(contractorName);
-        reliability.weeksActive += 1;
-        reliability.executionPctSum += executedPct;
-        if (executedPct >= contractorReliabilityTargetPct) reliability.weeksAboveTarget += 1;
-      }
+    });
+
+    contractorWeekPpc.forEach((item) => {
+      const plannedBase = Number(item.plannedBase || 0);
+      if (plannedBase <= 0) return;
+      const executedPlanned = Number(item.executedPlanned || 0);
+      const executionPct = Number(((executedPlanned / plannedBase) * 100).toFixed(2));
+      const reliability = ensureContractorReliability(String(item.contractor || 'SEM EMPREITEIRO'));
+      reliability.weeksActive += 1;
+      reliability.executionPctSum += executionPct;
+      if (executionPct >= contractorReliabilityTargetPct) reliability.weeksAboveTarget += 1;
     });
 
     if (!monthContractorPerformance.has(row.monthKey)) monthContractorPerformance.set(row.monthKey, new Map());
@@ -2263,8 +2273,8 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
   const excludedWeeksCount = excludedWeeks.length;
   const excludedCurrentWeek = requestedWeekNumberSafe > selectedWeekNumberSafe;
   const noticeMessage = excludedWeeksCount > 0
-    ? `Dados consolidados até a Semana ${selectedWeekNumberSafe} (última semana com feedback fechado). Semanas sem feedback fechado até a semana solicitada não foram incluídas.`
-    : `Dados consolidados até a Semana ${selectedWeekNumberSafe} (última semana com feedback fechado).`;
+    ? `Dados consolidados até a Semana ${selectedWeekNumberSafe} (última semana com feedback e qualidade percebida fechados). Semanas sem fechamento completo até a semana solicitada não foram incluídas.`
+    : `Dados consolidados até a Semana ${selectedWeekNumberSafe} (última semana com feedback e qualidade percebida fechados).`;
 
   return {
     work: {
@@ -3516,7 +3526,7 @@ router.get('/works/:workId/dashboard/reports/history/pdf', authenticate, loadUse
   addPage();
   drawSectionTitle('1 - Introdução', 80);
   const introText = [
-    'Este relatório histórico consolida os resultados da obra desde a primeira semana com feedback fechado até a semana de corte selecionada. O objetivo é apresentar, de forma clara e objetiva, desempenho, qualidade percebida e governança do processo.',
+    'Este relatório histórico consolida os resultados da obra desde a primeira semana com feedback e qualidade percebida fechados até a semana de corte selecionada. O objetivo é apresentar, de forma clara e objetiva, desempenho, qualidade percebida e governança do processo.',
     'CAPÍTULO 2 - DESEMPENHO',
     'O Capítulo 2 é focado na apresentação do desempenho da obra e dos empreiteiros ao longo do período.',
     '  2.1 - Resumo acumulado da obra: apresenta os principais números consolidados do histórico.',
