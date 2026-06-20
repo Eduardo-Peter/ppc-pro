@@ -918,6 +918,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
     prisma.week.findMany({
       where: { workId },
       include: {
+        work: { select: { startDate: true } },
         planningClosedBy: { select: { name: true } },
         feedbackClosedBy: { select: { name: true } },
       },
@@ -1550,7 +1551,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
   const ppcHistoryConsidered = Number(metrics?.totals?.executed || 0)
     + Number(metrics?.totals?.started || 0)
     + Number(metrics?.totals?.notStarted || 0);
-  const ppcHistoryExecutionPct = ppcHistoryConsidered > 0
+  const ppcHistoryAccumulatedPct = ppcHistoryConsidered > 0
     ? Number(((Number(metrics?.totals?.executed || 0) / ppcHistoryConsidered) * 100).toFixed(2))
     : 0;
   const planningTasksByWeek = new Map();
@@ -2269,6 +2270,9 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
   const selectedWeekNumberSafe = Number(selectedWeek.weekNumber);
   const excludedWeeksCount = excludedWeeks.length;
   const excludedCurrentWeek = requestedWeekNumberSafe > selectedWeekNumberSafe;
+  const ppcWeeklyAveragePct = weeklyRows.length
+    ? Number((weeklyRows.reduce((acc, item) => acc + Number(item?.ppc || 0), 0) / weeklyRows.length).toFixed(2))
+    : 0;
   const noticeMessage = excludedWeeksCount > 0
     ? `Dados consolidados até a Semana ${selectedWeekNumberSafe} (última semana com feedback e qualidade percebida fechados). Semanas sem fechamento completo até a semana solicitada não foram incluídas.`
     : `Dados consolidados até a Semana ${selectedWeekNumberSafe} (última semana com feedback e qualidade percebida fechados).`;
@@ -2327,7 +2331,8 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
       avgPlannedPerWeek: historyWeeks.length ? Number((historyPlanned / historyWeeks.length).toFixed(2)) : 0,
       ppcPlanned: Number(ppcHistoryConsidered || 0),
       ppcExecuted: Number(metrics?.totals?.executed || 0),
-      ppcExecutionPct: Number(ppcHistoryExecutionPct || 0),
+      ppcExecutionPct: Number(ppcWeeklyAveragePct || 0),
+      ppcAccumulatedPct: Number(ppcHistoryAccumulatedPct || 0),
     },
     plannedDistribution: {
       planned: Number(plannedDistributionTotals.planned || 0),

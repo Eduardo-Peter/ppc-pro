@@ -1088,6 +1088,9 @@
             </article>
           </div>
           <div class="table-wrap">
+            <div id="planningWeatherInline" class="plan-table-weather-inline">
+              <div id="planningWeatherInlineStrip" class="weather-inline-strip"></div>
+            </div>
             <table class="plan-table">
               <thead>
                 
@@ -1315,7 +1318,10 @@
               <small>Auto-preenchido com a semana anterior + 7 dias. Você pode ajustar manualmente.</small>
             </div>
             <div class="work-modal-input">
-              <input id="ppcMeetingDate" type="text" inputmode="numeric" maxlength="10" placeholder="DD/MM/AAAA" />
+              <div class="work-modal-input work-modal-input--split">
+                <input id="ppcMeetingDate" type="text" inputmode="numeric" maxlength="10" placeholder="DD/MM/AAAA" />
+                <input id="ppcMeetingDatePicker" class="work-modal-input--picker" type="date" aria-label="Selecionar data da reunião" />
+              </div>
             </div>
           </div>
           <div class="work-modal-row">
@@ -1333,6 +1339,7 @@
             <button id="ppcMeetingPreExportMinutesPdfBtn" type="button">Gerar PDF ata + presença (pré-reunião)</button>
             <button id="ppcMeetingPreSendAllEmailBtn" type="button" class="secondary">Enviar e-mail (atividades + convocação)</button>
           </div>
+          <div id="ppcMeetingWeatherStrip" class="weather-inline-strip weather-inline-strip--meeting"></div>
           <div class="table-wrap">
             <table>
               <thead>
