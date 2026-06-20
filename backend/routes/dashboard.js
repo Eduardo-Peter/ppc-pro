@@ -1255,20 +1255,23 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
         return;
       }
 
-      if (!(isReserve && !isExecutedOutcome)) {
-        ppcContractor.plannedBase += 1;
-        if (outcome === 'EXECUTED') ppcContractor.executedPlanned += 1;
+      // Regra de negócio:
+      // Reserva cancelada/não executada não entra no histórico de PPC,
+      // nem nos acumulados de planejadas/canceladas.
+      if (isReserve && !isExecutedOutcome) {
+        return;
       }
+
+      ppcContractor.plannedBase += 1;
+      if (outcome === 'EXECUTED') ppcContractor.executedPlanned += 1;
 
       // Base de performance do empreiteiro:
       // reserva só entra como planejada se executada.
-      if (!(isReserve && !isExecutedOutcome)) {
-        perfContractor.plannedBase += 1;
-        if (outcome !== 'EXECUTED') {
-          const parsedCause = parseCauseDescription(feedback?.cause?.description || '');
-          if (parsedCause.contractorSpecific) {
-            perfContractor.contractorSpecificNonCompliance += 1;
-          }
+      perfContractor.plannedBase += 1;
+      if (outcome !== 'EXECUTED') {
+        const parsedCause = parseCauseDescription(feedback?.cause?.description || '');
+        if (parsedCause.contractorSpecific) {
+          perfContractor.contractorSpecificNonCompliance += 1;
         }
       }
 
@@ -1544,17 +1547,11 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
   const historyExecutionPct = historyPlanned
     ? Number(((historyExecutedPlanned / historyPlanned) * 100).toFixed(2))
     : 0;
-  const ppcHistoryBase = tasks.reduce((acc, task) => {
-    if (task?.isUnplanned === true) return acc;
-    const outcome = taskOutcome(task, feedbackByTaskId);
-    const isReserve = String(task?.status || '').toUpperCase() === TASK_STATUS.RESERVA;
-    if (isReserve && outcome !== 'EXECUTED') return acc;
-    acc.planned += 1;
-    if (outcome === 'EXECUTED') acc.executed += 1;
-    return acc;
-  }, { planned: 0, executed: 0 });
-  const ppcHistoryExecutionPct = Number(ppcHistoryBase.planned || 0) > 0
-    ? Number(((Number(ppcHistoryBase.executed || 0) / Number(ppcHistoryBase.planned || 0)) * 100).toFixed(2))
+  const ppcHistoryConsidered = Number(metrics?.totals?.executed || 0)
+    + Number(metrics?.totals?.started || 0)
+    + Number(metrics?.totals?.notStarted || 0);
+  const ppcHistoryExecutionPct = ppcHistoryConsidered > 0
+    ? Number(((Number(metrics?.totals?.executed || 0) / ppcHistoryConsidered) * 100).toFixed(2))
     : 0;
   const planningTasksByWeek = new Map();
   const unplannedExecutedByWeek = new Map();
@@ -1979,7 +1976,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
       feedbackDeadlineTime,
       'FRIDAY',
       '17:00',
-      { scope: 'NEXT_WEEK' },
+        { scope: 'CURRENT_WEEK' },
     );
     const qualityDeadline = computeWeekDeadlineDate(
       week,
@@ -1987,7 +1984,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
       qualityDeadlineTime,
       'SATURDAY',
       '17:00',
-      { scope: 'NEXT_WEEK' },
+        { scope: 'CURRENT_WEEK' },
     );
     const month = assignMonthForWeekByWorkdays(week);
     if (!monthlyGovernanceMap.has(month.monthKey)) {
@@ -2328,8 +2325,8 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
       executedPlannedPct: historyExecutionPct,
       totalExecutedPct: Number(metrics?.totalExecutedPct || 0),
       avgPlannedPerWeek: historyWeeks.length ? Number((historyPlanned / historyWeeks.length).toFixed(2)) : 0,
-      ppcPlanned: Number(ppcHistoryBase.planned || 0),
-      ppcExecuted: Number(ppcHistoryBase.executed || 0),
+      ppcPlanned: Number(ppcHistoryConsidered || 0),
+      ppcExecuted: Number(metrics?.totals?.executed || 0),
       ppcExecutionPct: Number(ppcHistoryExecutionPct || 0),
     },
     plannedDistribution: {
@@ -3620,7 +3617,7 @@ router.get('/works/:workId/dashboard/reports/history/pdf', authenticate, loadUse
 
   const weeklyTrend = Array.isArray(data.weeklyTrend) ? data.weeklyTrend : [];
   const totalWeeks = Math.max(1, Number(data.range?.totalWeeks || weeklyTrend.length || 0));
-  const weeksWithMeta = weeklyTrend.filter((item) => Number(item.executedPlannedPct || 0) >= ppcMetaTarget).length;
+  const weeksWithMeta = weeklyTrend.filter((item) => Number(item.ppc || 0) >= ppcMetaTarget).length;
   const weeksWithMetaPct = totalWeeks ? Number(((weeksWithMeta / totalWeeks) * 100).toFixed(2)) : 0;
 
   const plannedTotal = Number(data.totals?.planned || 0);
@@ -3941,9 +3938,7 @@ router.get('/works/:workId/dashboard/reports/history/pdf', authenticate, loadUse
   const monthlyGlobal = Array.isArray(data.monthly?.global) ? data.monthly.global : [];
   const monthlyLabels = monthlyGlobal.map((m) => m.monthLabel);
   const ppcTargetPct = Number(data.settings?.ppcTargetPct ?? data.work?.ppcTargetPct ?? 80);
-  const monthlyExecPlanPct = monthlyGlobal.map((m) => (
-    Number(m.planned || 0) ? Number(((Number(m.executed || 0) / Number(m.planned || 0)) * 100).toFixed(2)) : 0
-  ));
+  const monthlyExecPlanPct = monthlyGlobal.map((m) => Number(m.avgPpc || 0));
   const monthlyAvgGlobal = monthlyExecPlanPct.length
     ? Number((monthlyExecPlanPct.reduce((acc, value) => acc + Number(value || 0), 0) / monthlyExecPlanPct.length).toFixed(2))
     : 0;
@@ -3964,7 +3959,7 @@ router.get('/works/:workId/dashboard/reports/history/pdf', authenticate, loadUse
       lineBreak: false,
     });
   const monthlyPerfBars = [
-    { label: '% executadas/planejadas por mês', color: '#2f8f65', values: monthlyExecPlanPct },
+    { label: 'PPC por mês', color: '#2f8f65', values: monthlyExecPlanPct },
   ];
   const monthlyPerfLines = [
     { label: 'Média histórica', color: '#1d4e89', values: monthlyExecPlanPct.map(() => monthlyAvgGlobal), hidePoints: true },
@@ -3999,7 +3994,7 @@ router.get('/works/:workId/dashboard/reports/history/pdf', authenticate, loadUse
     { fontSize: 7.9, rowH: 14, sw: 9 },
   );
   doc.fillColor(COLORS.text).font('Helvetica').fontSize(9.0)
-    .text('Cálculo do PPC mensal: considera apenas atividades planejadas. Atividades não planejadas e executadas não entram no cálculo. Atividades em status Reserva contam como planejadas apenas quando executadas.', margin + 10, monthlyLegendBottom + 6, {
+    .text('Cálculo do PPC mensal: considera apenas atividades planejadas executadas, iniciadas e não iniciadas. Atividades canceladas e atividades não planejadas e executadas não entram no cálculo do PPC. Atividades em status Reserva contam como planejadas apenas quando executadas.', margin + 10, monthlyLegendBottom + 6, {
       width: contentWidth - 20,
       align: 'justify',
       lineBreak: true,
@@ -4007,7 +4002,7 @@ router.get('/works/:workId/dashboard/reports/history/pdf', authenticate, loadUse
   y += ppcPerfSectionH + 8;
 
   const weeklyLabels = weeklyTrend.map((w) => `S${w.weekNumber}`);
-  const weeklyExecPlanPct = weeklyTrend.map((w) => Number(w.executedPlannedPct || 0));
+  const weeklyExecPlanPct = weeklyTrend.map((w) => Number(w.ppc || 0));
   const weeklyAvgGlobal = weeklyExecPlanPct.length
     ? Number((weeklyExecPlanPct.reduce((acc, value) => acc + Number(value || 0), 0) / weeklyExecPlanPct.length).toFixed(2))
     : 0;
@@ -4027,7 +4022,7 @@ router.get('/works/:workId/dashboard/reports/history/pdf', authenticate, loadUse
       lineBreak: false,
     });
   const weeklyPerfBars = [
-    { label: '% executadas/planejadas por semana', color: '#2f8f65', values: weeklyExecPlanPct },
+    { label: 'PPC por semana', color: '#2f8f65', values: weeklyExecPlanPct },
   ];
   const weeklyPerfLines = [
     { label: 'Média histórica', color: '#1d4e89', values: weeklyExecPlanPct.map(() => weeklyAvgGlobal), hidePoints: true },
@@ -4062,7 +4057,7 @@ router.get('/works/:workId/dashboard/reports/history/pdf', authenticate, loadUse
     { fontSize: 7.9, rowH: 14, sw: 9 },
   );
   doc.fillColor(COLORS.text).font('Helvetica').fontSize(9.0)
-    .text('Cálculo do PPC semanal: considera apenas atividades planejadas. Atividades não planejadas e executadas não entram no cálculo. Atividades em status Reserva contam como planejadas apenas quando executadas.', margin + 10, weeklyLegendBottom + 6, {
+    .text('Cálculo do PPC semanal: considera apenas atividades planejadas executadas, iniciadas e não iniciadas. Atividades canceladas e atividades não planejadas e executadas não entram no cálculo do PPC. Atividades em status Reserva contam como planejadas apenas quando executadas.', margin + 10, weeklyLegendBottom + 6, {
       width: contentWidth - 20,
       align: 'justify',
       lineBreak: true,
@@ -7193,7 +7188,7 @@ router.get('/works/:workId/dashboard/reports/last-week/pdf', authenticate, loadU
         notificationRule?.feedbackDeadlineTime,
         'FRIDAY',
         '17:00',
-        { scope: 'NEXT_WEEK' },
+      { scope: 'CURRENT_WEEK' },
       ),
       closedAt: week.feedbackClosedAt || null,
       closedBy: String(week.feedbackClosedBy?.name || '-'),
@@ -7206,7 +7201,7 @@ router.get('/works/:workId/dashboard/reports/last-week/pdf', authenticate, loadU
         notificationRule?.qualityDeadlineTime,
         'SATURDAY',
         '17:00',
-        { scope: 'NEXT_WEEK' },
+      { scope: 'CURRENT_WEEK' },
       ),
       closedAt: week.qualityClosedAt || null,
       closedBy: String(week.qualityClosedBy?.name || '-'),

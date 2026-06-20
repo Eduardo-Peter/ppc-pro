@@ -621,6 +621,17 @@ function formatTimeLocalFromIso(value) {
   return `${hours}:${minutes}`;
 }
 
+function formatIsoDateInputFromValue(value) {
+  if (!value) return '';
+  const key = dateKeyLocal(value);
+  const date = dateFromKeyLocal(key);
+  if (!date) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function parseBrDateTimeToIso(dateText, timeText) {
   const parsedDate = parseBrDate(dateText);
   if (!parsedDate) return { iso: null, error: 'invalid_meeting_date' };
@@ -4094,67 +4105,89 @@ function applyPlanningHolidayHighlights() {
 
 function renderWeather() {
   const strip = $('#weatherStrip');
+  const inlineStrip = $('#planningWeatherInlineStrip');
   const titleEl = $('#planningWeatherTitle');
-  strip.innerHTML = '';
   const rows = weekDisplayWeatherDaysWithSunday(planningWeekContext());
+  if (strip) strip.innerHTML = '';
+  if (inlineStrip) inlineStrip.innerHTML = '';
   if (titleEl) {
     titleEl.textContent = 'Previsão do tempo (domingo a sábado)';
   }
   if (!rows.length) {
-    strip.innerHTML = '<p>Sem previsão para a semana selecionada.</p>';
+    if (strip) strip.innerHTML = '<p>Sem previsão para a semana selecionada.</p>';
+    if (inlineStrip) inlineStrip.innerHTML = '<div class="weather-inline-empty">Sem previsão para a semana selecionada.</div>';
     applyPlanningHolidayHighlights();
     renderWeatherMiniThumb();
+    renderPpcMeetingWeatherMini();
     return;
   }
 
   rows.forEach((day) => {
     const isHoliday = isHolidayDate(day.dayDate);
-    const card = document.createElement('div');
-    card.className = `weather-card${isHoliday ? ' is-holiday' : ''}`;
-    card.innerHTML = `
-      <strong>${PT_WEEKDAY[day.weekday] || day.weekday}</strong>
-      <small>${formatDate(day.dayDate)}</small>
-      <div>${weatherEmoji(day.icon)} ${weatherPt(day.icon)}</div>
-      <small>Mín ${day.tempMinC ?? '-'}°C / Máx ${day.tempMaxC ?? '-'}°C</small>
-      <small>${formatRainProbabilityInfo(day.precipitationProbabilityPct)}</small>
-      <small>${formatRainInfo(day.precipitationMm)}</small>
-      ${isHoliday ? '<small class="weather-holiday-tag">Feriado</small>' : ''}
-    `;
-    strip.appendChild(card);
+    if (strip) {
+      const card = document.createElement('div');
+      card.className = `weather-card${isHoliday ? ' is-holiday' : ''}`;
+      card.innerHTML = `
+        <strong>${PT_WEEKDAY[day.weekday] || day.weekday}</strong>
+        <small>${formatDate(day.dayDate)}</small>
+        <div>${weatherEmoji(day.icon)} ${weatherPt(day.icon)}</div>
+        <small>Mín ${day.tempMinC ?? '-'}°C / Máx ${day.tempMaxC ?? '-'}°C</small>
+        <small>${formatRainProbabilityInfo(day.precipitationProbabilityPct)}</small>
+        <small>${formatRainInfo(day.precipitationMm)}</small>
+        ${isHoliday ? '<small class="weather-holiday-tag">Feriado</small>' : ''}
+      `;
+      strip.appendChild(card);
+    }
+    if (inlineStrip) {
+      const item = document.createElement('div');
+      item.className = `weather-inline-item${isHoliday ? ' is-holiday' : ''}`;
+      item.innerHTML = `
+        <strong>${PT_WEEKDAY[day.weekday] || day.weekday}</strong>
+        <small>${weatherEmoji(day.icon)} ${day.tempMinC ?? '-'}°/${day.tempMaxC ?? '-'}°</small>
+        <small>${formatRainProbabilityInfo(day.precipitationProbabilityPct)}</small>
+        <small>${formatRainInfo(day.precipitationMm)}</small>
+      `;
+      inlineStrip.appendChild(item);
+    }
   });
   applyPlanningHolidayHighlights();
   renderWeatherMiniThumb();
+  renderPpcMeetingWeatherMini();
 }
 
 function renderWeatherMiniThumb() {
   const mini = $('#weatherMiniThumb');
   if (!mini) return;
-  const planningActive = isPlanningTab(activeTabName());
-  if (!planningActive || state.weatherStripVisible) {
-    mini.classList.add('hidden');
-    mini.innerHTML = '';
-    return;
-  }
+  mini.classList.add('hidden');
+  mini.innerHTML = '';
+}
 
-  const rows = weekDisplayWeatherDaysWithSunday(planningWeekContext());
+function ppcMeetingWeekContext() {
+  return ppcMeetingWeekSelected() || virtualWeekByNumber(ppcMeetingWeekNumberField()) || planningWeekContext();
+}
+
+function renderPpcMeetingWeatherMini() {
+  const strip = $('#ppcMeetingWeatherStrip');
+  if (!strip) return;
+  strip.innerHTML = '';
+  const rows = weekDisplayWeatherDaysWithSunday(ppcMeetingWeekContext());
   if (!rows.length) {
-    mini.classList.add('hidden');
-    mini.innerHTML = '';
+    strip.innerHTML = '<div class="weather-inline-empty">Sem previsão para a semana selecionada.</div>';
     return;
   }
-
-  const items = rows.map((day) => {
-    const short = PT_WEEKDAY[day.weekday] || String(day.weekday || '').slice(0, 3);
-    return `<span class="weather-mini-item"><strong>${escapeHtml(short)}</strong> ${weatherEmoji(day.icon)}</span>`;
-  }).join('');
-
-  mini.innerHTML = `
-    <div class="weather-mini-title">Previsão da semana</div>
-    <div class="weather-mini-row">${items}</div>
-  `;
-  mini.classList.add('is-draggable');
-  applyWeatherMiniThumbPosition();
-  mini.classList.remove('hidden');
+  rows.forEach((day) => {
+    const isHoliday = isHolidayDate(day.dayDate);
+    const item = document.createElement('div');
+    item.className = `weather-inline-item${isHoliday ? ' is-holiday' : ''}`;
+    item.innerHTML = `
+      <strong>${PT_WEEKDAY[day.weekday] || day.weekday}</strong>
+      <small>${formatDate(day.dayDate)}</small>
+      <small>${weatherEmoji(day.icon)} ${day.tempMinC ?? '-'}°/${day.tempMaxC ?? '-'}°</small>
+      <small>${formatRainProbabilityInfo(day.precipitationProbabilityPct)}</small>
+      <small>${formatRainInfo(day.precipitationMm)}</small>
+    `;
+    strip.appendChild(item);
+  });
 }
 
 function setupWeatherMiniThumbObserver() {
@@ -4265,10 +4298,68 @@ function taskOriginWeekNumber(task) {
   return task?.originWeek?.weekNumber || '';
 }
 
+function normalizeDraftSequenceNumbers() {
+  let seq = Math.max(0, ...state.tasks.map((item) => Number(item.sequenceNumber) || 0)) + 1;
+  state.sheetDraftRows.forEach((item) => {
+    item.sequenceNumber = seq++;
+  });
+}
+
 function nextSheetSequenceNumber() {
+  normalizeDraftSequenceNumbers();
   const existing = state.tasks.map((item) => Number(item.sequenceNumber) || 0);
   const drafts = state.sheetDraftRows.map((item) => Number(item.sequenceNumber) || 0);
   return Math.max(0, ...existing, ...drafts) + 1;
+}
+
+function syncSheetRowSequenceNumbers(rows = [...$('#tasksBody').querySelectorAll('tr[data-sheet-row-kind]')]) {
+  rows.forEach((row, index) => {
+    const nextValue = String(index + 1);
+    const seqEl = row.querySelector('.sheet-seq');
+    if (seqEl) {
+      seqEl.dataset.sequenceValue = nextValue;
+      seqEl.textContent = nextValue;
+    }
+  });
+}
+
+function buildPersistedSheetPayloadFromTask(task, sequenceNumberOverride) {
+  const level1 = task.locationLevel1 || task.location?.level1 || '';
+  const rawLevel2 = task.locationLevel2 || task.location?.level2 || '';
+  const level2 = displayLocationLevel2(task.location) === '-' ? '' : rawLevel2;
+  const originWeekNumber = task.originWeekNumber || taskOriginWeekNumber(task) || '';
+  return {
+    sequenceNumber: Number(sequenceNumberOverride) || Number(task.sequenceNumber) || null,
+    originWeekNumber: originWeekNumber ? Number(originWeekNumber) || originWeekNumber : null,
+    contractorId: Number(task.contractorId || task.contractor?.id) || null,
+    supervisor: task.supervisor || task.contractor?.supervisor || null,
+    locationLevel1: level1 || null,
+    locationLevel2: level2 || null,
+    description: String(task.description || '').trim(),
+    plannedStart: task.plannedStart ? formatDate(task.plannedStart) : null,
+    plannedEnd: task.plannedEnd ? formatDate(task.plannedEnd) : null,
+    status: String(task.status || 'PLANNED').toUpperCase(),
+    plannedDays: (task.plannedDays || [])
+      .map((item) => ({ weekday: String(item?.weekday || '').toUpperCase() }))
+      .filter((item) => item.weekday),
+  };
+}
+
+async function resequencePersistedPlanningTasks() {
+  const orderedTasks = [...state.tasks]
+    .sort((a, b) => (Number(a.sequenceNumber) || 0) - (Number(b.sequenceNumber) || 0));
+  let changed = false;
+  for (let index = 0; index < orderedTasks.length; index += 1) {
+    const task = orderedTasks[index];
+    const nextSequence = index + 1;
+    if ((Number(task.sequenceNumber) || 0) === nextSequence) continue;
+    await api(planningTaskItemPath(task.id), {
+      method: 'PUT',
+      body: buildPersistedSheetPayloadFromTask(task, nextSequence),
+    });
+    changed = true;
+  }
+  return changed;
 }
 
 async function addSheetDraftRows(count) {
@@ -4297,6 +4388,7 @@ async function addSheetDraftRows(count) {
       plannedDays: [],
     });
   }
+  normalizeDraftSequenceNumbers();
   renderTasks();
   setStatus(`${qty} linha(s) em branco adicionada(s) na planilha.`);
 }
@@ -4668,6 +4760,10 @@ function renderPpcMeetingTab() {
     attendanceBody.innerHTML = '<tr><td colspan="3">Selecione uma semana e clique em Atualizar.</td></tr>';
     dateInput.value = '';
     timeInput.value = '';
+    if ($('#ppcMeetingDatePicker')) {
+      $('#ppcMeetingDatePicker').value = '';
+      $('#ppcMeetingDatePicker').disabled = true;
+    }
     minutesEl.value = '';
     if (savePreBtn) savePreBtn.disabled = true;
     if (savePostBtn) savePostBtn.disabled = true;
@@ -4680,6 +4776,9 @@ function renderPpcMeetingTab() {
     if (exportMinutesBtn) exportMinutesBtn.disabled = true;
     if (sendMinutesBtn) sendMinutesBtn.disabled = true;
     if (exportAllPreBtn) exportAllPreBtn.disabled = true;
+    if ($('#ppcMeetingWeatherStrip')) {
+      $('#ppcMeetingWeatherStrip').innerHTML = '<div class="weather-inline-empty">Sem previsão para a semana selecionada.</div>';
+    }
     if (closedInfoEl) closedInfoEl.textContent = '';
     if (checklistEl) checklistEl.innerHTML = '';
     return;
@@ -4688,8 +4787,13 @@ function renderPpcMeetingTab() {
   const prePlanningClosed = String(week.prePlanningStatus || '').toUpperCase() === 'CLOSED';
   const closed = meeting.isClosed === true;
   const dateSource = meeting.meetingAt || meeting.suggestedMeetingAt || null;
+  const datePicker = $('#ppcMeetingDatePicker');
   dateInput.value = formatDateBrLocalFromIso(dateSource);
   timeInput.value = formatTimeLocalFromIso(dateSource);
+  if (datePicker) {
+    datePicker.value = formatIsoDateInputFromValue(dateSource);
+    datePicker.disabled = closed || !prePlanningClosed;
+  }
   minutesEl.value = String(meeting.minutes || '');
   dateInput.disabled = closed || !prePlanningClosed;
   timeInput.disabled = closed || !prePlanningClosed;
@@ -4724,6 +4828,7 @@ function renderPpcMeetingTab() {
   }
 
   const rows = ppcMeetingContractorRows(meeting);
+  renderPpcMeetingWeatherMini();
   if (checklistEl) {
     const dateFilled = Boolean(dateInput.value && timeInput.value);
     checklistEl.innerHTML = `<div class="ppc-checklist-grid">${[
@@ -6368,7 +6473,7 @@ function renderDashboardHistory(data) {
   const ppcTargetPct = Number(data.settings?.ppcTargetPct ?? data.work?.ppcTargetPct ?? 80);
   const planned = Number(totals.planned || 0);
   const executed = Number(totals.executed || 0);
-  const executedPct = Number(totals.executedPlannedPct || (planned ? ((executed / planned) * 100) : 0));
+  const ppcPct = Number(totals.ppcExecutionPct || 0);
   const avgPlannedPerWeek = Number(totals.avgPlannedPerWeek || 0);
 
   if (coverageNotice) {
@@ -6381,7 +6486,7 @@ function renderDashboardHistory(data) {
 
   if (kpi) {
     kpi.innerHTML = `
-      <div class="kpi"><label>Média atendimento PPC</label><strong>${Number(totals.executedPlannedPct || 0).toFixed(2)}%</strong></div>
+      <div class="kpi"><label>Média atendimento PPC</label><strong>${ppcPct.toFixed(2)}%</strong></div>
       <div class="kpi"><label>Total planejadas</label><strong>${planned}</strong></div>
       <div class="kpi"><label>Média atividades/semana</label><strong>${avgPlannedPerWeek.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
       <div class="kpi"><label>Executadas</label><strong>${executed}</strong></div>
@@ -6406,11 +6511,11 @@ function renderDashboardHistory(data) {
   if (trendBars) {
     const trendItems = weeklyTrend.slice().sort((a, b) => Number(a.weekNumber) - Number(b.weekNumber)).map((item) => ({
       label: `Sem ${item.weekNumber} (${item.monthLabel || '-'})`,
-      pct: Number(item.executedPlannedPct || 0),
+      pct: Number(item.ppc || 0),
       color: '#2f8f65',
     }));
     trendBars.innerHTML = `
-      <div class="chart-bar-label">Média histórica: ${executedPct.toFixed(2)}% | Meta: ${ppcTargetPct.toFixed(2)}%</div>
+      <div class="chart-bar-label">Média histórica: ${ppcPct.toFixed(2)}% | Meta: ${ppcTargetPct.toFixed(2)}%</div>
       ${dashboardBarRowsHtml(trendItems)}
     `;
   }
@@ -6418,7 +6523,7 @@ function renderDashboardHistory(data) {
   if (monthlyPerfBars) {
     const monthlyItems = monthlyGlobal.map((item) => ({
       label: `${item.monthLabel || '-'} (Meta ${ppcTargetPct.toFixed(2)}%)`,
-      pct: Number(item.avgExecutedPlannedPct || 0),
+      pct: Number(item.avgPpc || 0),
       color: '#2f8f65',
     }));
     const monthlyAvg = monthlyItems.length
@@ -6593,7 +6698,10 @@ async function refreshDashboardHistoryTab(options = {}) {
 
   let weekNumber = dashboardWeekNumberField();
   if (!weekNumber && useDefault) {
-    const closedWeeks = (state.weeks || []).filter((item) => String(item.feedbackStatus || '').toUpperCase() === 'CLOSED');
+    const closedWeeks = (state.weeks || []).filter((item) => (
+      String(item.feedbackStatus || '').toUpperCase() === 'CLOSED'
+      && String(item.qualityStatus || '').toUpperCase() === 'CLOSED'
+    ));
     const fallbackWeek = closedWeeks.length
       ? closedWeeks[closedWeeks.length - 1]
       : ((state.weeks || []).length ? state.weeks[state.weeks.length - 1] : null);
@@ -10796,6 +10904,7 @@ async function handleSaveWeekSheet() {
       setStatus('Não há linhas na planilha para salvar.', true);
       return;
     }
+    syncSheetRowSequenceNumbers(rows);
 
     const issues = [];
     const operations = [];
@@ -10953,11 +11062,14 @@ async function handleSaveWeekSheet() {
 async function deleteSheetTask(taskId) {
   await api(planningTaskItemPath(taskId), { method: 'DELETE' });
   await loadTasksAndDashboard();
+  const resequenced = await resequencePersistedPlanningTasks();
+  if (resequenced) await loadTasksAndDashboard();
   setStatus(`Linha #${taskId} excluída.`);
 }
 
 function removeSheetDraft(draftId) {
   state.sheetDraftRows = state.sheetDraftRows.filter((item) => item.draftId !== draftId);
+  normalizeDraftSequenceNumbers();
   renderTasks();
   setStatus('Linha de rascunho removida.');
 }
@@ -11007,6 +11119,7 @@ async function handleImportGroupToWeek() {
         plannedDays: [],
       });
     });
+    normalizeDraftSequenceNumbers();
     renderTasks();
     setStatus(`Grupo carregado na planilha (${items.length} linha(s)).`);
   } catch (error) {
@@ -11022,6 +11135,8 @@ async function handleTaskAction(event) {
     try {
       await api(`/tasks/${taskId}/cancel`, { method: 'POST' });
       await loadTasksAndDashboard();
+      const resequenced = await resequencePersistedPlanningTasks();
+      if (resequenced) await loadTasksAndDashboard();
       setStatus(`Atividade #${taskId} cancelada com sucesso.`);
     } catch (error) {
       setStatus(translateApiError(error.message, 'Erro ao cancelar atividade'), true);
@@ -11036,6 +11151,8 @@ async function handleTaskAction(event) {
     try {
       await api(`/pre-tasks/${taskId}/cancel`, { method: 'POST' });
       await loadTasksAndDashboard();
+      const resequenced = await resequencePersistedPlanningTasks();
+      if (resequenced) await loadTasksAndDashboard();
       setStatus(`Atividade pendente #${taskId} cancelada com sucesso.`);
     } catch (error) {
       setStatus(translateApiError(error.message, 'Erro ao cancelar atividade pendente'), true);
@@ -11153,7 +11270,25 @@ function bindEvents() {
     const input = $('#ppcMeetingDate');
     if (!input) return;
     input.value = normalizeBrDateInput(input.value);
+    const picker = $('#ppcMeetingDatePicker');
+    if (picker) {
+      const parsed = parseBrDate(input.value);
+      picker.value = parsed ? formatIsoDateInputFromValue(parsed) : '';
+    }
   });
+  if ($('#ppcMeetingDatePicker')) {
+    $('#ppcMeetingDatePicker').addEventListener('change', () => {
+      const picker = $('#ppcMeetingDatePicker');
+      const input = $('#ppcMeetingDate');
+      if (!picker || !input) return;
+      if (!picker.value) {
+        input.value = '';
+        return;
+      }
+      const [year, month, day] = String(picker.value).split('-');
+      input.value = `${day}/${month}/${year}`;
+    });
+  }
   $('#ppcMeetingTime').addEventListener('input', () => {
     const input = $('#ppcMeetingTime');
     if (!input) return;
