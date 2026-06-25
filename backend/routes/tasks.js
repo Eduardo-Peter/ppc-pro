@@ -1953,7 +1953,7 @@ router.get('/weeks/:weekId/tasks/export/contractor/:contractorId/pdf', authentic
       if (col.key === 'task') {
         const fontSize = 7.2;
         doc.fillColor(COLORS.text).font('Helvetica').fontSize(fontSize);
-        const textH = doc.heightOfString(values.task, { width: col.width - 6, lineGap: 0, align: 'right' });
+        const textH = doc.heightOfString(values.task, { width: col.width - 6, lineGap: 0, align: 'right', lineBreak: false });
         const top = Math.max(yStart + 2, yStart + ((rowHData - Math.min(textH, rowHData - 4)) / 2));
         doc.text(values.task, x + 3, top, {
           width: col.width - 6,
@@ -1961,6 +1961,7 @@ router.get('/weeks/:weekId/tasks/export/contractor/:contractorId/pdf', authentic
           ellipsis: true,
           lineGap: 0,
           align: 'right',
+          lineBreak: false,
         });
       } else if (['mon', 'tue', 'wed', 'thu', 'fri', 'sat'].includes(col.key)) {
         const boxSize = 8;
@@ -1990,14 +1991,27 @@ router.get('/weeks/:weekId/tasks/export/contractor/:contractorId/pdf', authentic
     return yStart + rowHData;
   };
 
+  const drawActivitiesTableTitle = (yStart) => {
+    drawRoundBox(margin, yStart, contentWidth, 22, COLORS.boxStrong, COLORS.border, 6);
+    doc.fillColor(COLORS.text).font('Helvetica-Bold').fontSize(9.4)
+      .text('ATIVIDADES DA SEMANA', margin + 8, yStart + 6, {
+        width: contentWidth - 16,
+        align: 'center',
+        lineBreak: false,
+      });
+    return yStart + 26;
+  };
+
   const drawTableRepeatHeader = (newPageTitle = false) => {
     if (newPageTitle) {
       doc.fillColor(COLORS.text).font('Helvetica-Bold').fontSize(10)
         .text(repeatPageTitle, margin, margin - 4, { width: contentWidth, lineBreak: false });
     }
-    return drawTableHeader(doc.y + (newPageTitle ? 6 : 0));
+    const nextY = drawActivitiesTableTitle(doc.y + (newPageTitle ? 6 : 0));
+    return drawTableHeader(nextY);
   };
 
+  y = drawActivitiesTableTitle(y);
   y = drawTableHeader(y);
 
   if (!tasks.length) {
@@ -3910,6 +3924,61 @@ router.get('/weeks/:weekId/tasks/export/all/pdf', authenticate, loadUser, requir
       });
     });
 
+  const zoneMatrixByArea = new Map();
+  tasks.forEach((task) => {
+    const l1 = String(task.location?.level1 || '-');
+    const isL1Marker = String(task.location?.level2 || '').startsWith(ZONE_L1_PREFIX);
+    const l2 = isL1Marker ? '' : String(task.location?.level2 || '');
+    const contractorName = String(task.contractor?.name || '-');
+    const row = zoneMatrixByArea.get(l1) || {
+      zone1: l1,
+      __group: l1,
+      days: Object.fromEntries(weekdays.map((weekday) => [weekday, new Map()])),
+    };
+    (task.plannedDays || []).forEach((day) => {
+      const weekday = String(day.weekday || '').toUpperCase();
+      if (!row.days[weekday]) return;
+      row.days[weekday].set(`${l2}__${contractorName}`, {
+        z2: l2,
+        contractor: contractorName,
+      });
+    });
+    zoneMatrixByArea.set(l1, row);
+  });
+
+  const zoneContractorMatrixRows = [...zoneMatrixByArea.values()]
+    .sort((a, b) => String(a.zone1 || '').localeCompare(String(b.zone1 || ''), 'pt-BR'))
+    .flatMap((row) => {
+      const dayPairs = {};
+      weekdays.forEach((weekday) => {
+        dayPairs[weekday] = [...(row.days[weekday]?.values() || [])]
+          .sort((a, b) => (
+            String(a.z2 || '').localeCompare(String(b.z2 || ''), 'pt-BR')
+            || String(a.contractor || '').localeCompare(String(b.contractor || ''), 'pt-BR')
+          ))
+          .map((item) => ({
+            z2: String(item.z2 || ''),
+            contractor: String(item.contractor || '-'),
+          }));
+      });
+      const maxPairs = Math.max(
+        1,
+        ...weekdays.map((weekday) => dayPairs[weekday].length),
+      );
+      return Array.from({ length: maxPairs }, (_, pairIndex) => {
+        const line = {
+          zone1: row.zone1,
+          __group: row.__group,
+        };
+        weekdays.forEach((weekday) => {
+          const pair = dayPairs[weekday][pairIndex] || null;
+          line[`${weekday}_Z2`] = pair ? pair.z2 : '';
+          line[`${weekday}_NAME`] = pair ? pair.contractor : '';
+        });
+        return line;
+      });
+    });
+
   const drawMatrixSectionTitle = (yStart) => {
     drawRoundBox(margin, yStart, contentWidth, 24, COLORS.boxStrong, COLORS.border, 6);
     doc.fillColor(COLORS.text).font('Helvetica-Bold').fontSize(9.4)
@@ -4172,6 +4241,263 @@ router.get('/weeks/:weekId/tasks/export/all/pdf', authenticate, loadUser, requir
         y = drawPpcPageHeader();
         y = drawMatrixSectionTitle(y);
         y = drawMatrixHeader(y);
+      }
+    }
+  }
+
+  const zoneViewTitle = 'DISTRIBUICAO POR ZONA E EMPREITEIRO (SEGUNDA A SABADO)';
+  const zoneViewFirstW = 96;
+  const zoneViewSubW = (contentWidth - zoneViewFirstW) / 12;
+  const zoneViewHeaderRow1H = 14;
+  const zoneViewHeaderRow2H = 14;
+  const zoneViewHeaderH = zoneViewHeaderRow1H + zoneViewHeaderRow2H;
+  const zoneViewRowH = 22;
+  const zoneViewColumns = [
+    { key: 'zone1', width: zoneViewFirstW },
+    ...matrixDayDefs.flatMap(([weekday]) => ([
+      { key: `${weekday}_Z2`, width: zoneViewSubW },
+      { key: `${weekday}_NAME`, width: zoneViewSubW },
+    ])),
+  ];
+  const emptyZoneViewRow = {
+    zone1: 'Sem zonas planejadas na semana.',
+    __group: 'empty',
+  };
+  matrixDayDefs.forEach(([weekday]) => {
+    emptyZoneViewRow[`${weekday}_Z2`] = '';
+    emptyZoneViewRow[`${weekday}_NAME`] = '';
+  });
+
+  const drawZoneViewSectionTitle = (yStart) => {
+    drawRoundBox(margin, yStart, contentWidth, 24, COLORS.boxStrong, COLORS.border, 6);
+    doc.fillColor(COLORS.text).font('Helvetica-Bold').fontSize(9.4)
+      .text(zoneViewTitle, margin + 8, yStart + 7, {
+        width: contentWidth - 16,
+        align: 'center',
+        lineBreak: false,
+      });
+    return yStart + 28;
+  };
+
+  const drawZoneViewHeader = (yStart) => {
+    drawRoundBox(margin, yStart, contentWidth, zoneViewHeaderH, COLORS.header, COLORS.border, 4);
+    const topY = yStart;
+    const splitY = yStart + zoneViewHeaderRow1H;
+    const bottomY = yStart + zoneViewHeaderH;
+    const thickStroke = 1.15;
+    const thinStroke = 0.55;
+
+    doc.save().strokeColor(COLORS.border).lineWidth(thinStroke);
+    doc.moveTo(margin + zoneViewFirstW, topY).lineTo(margin + zoneViewFirstW, bottomY).stroke();
+    let x = margin + zoneViewFirstW;
+    for (let i = 0; i < 12; i += 1) {
+      doc.moveTo(x, splitY).lineTo(x, bottomY).stroke();
+      x += zoneViewSubW;
+    }
+    x = margin + zoneViewFirstW;
+    for (let i = 0; i < 6; i += 1) {
+      x += (zoneViewSubW * 2);
+      doc.moveTo(x, topY).lineTo(x, bottomY).stroke();
+    }
+    doc.moveTo(margin + zoneViewFirstW, splitY).lineTo(margin + contentWidth, splitY).stroke();
+    doc.restore();
+    doc.save().strokeColor(COLORS.border).lineWidth(thickStroke);
+    doc.moveTo(margin + zoneViewFirstW, topY).lineTo(margin + zoneViewFirstW, bottomY).stroke();
+    x = margin + zoneViewFirstW;
+    for (let i = 1; i < 6; i += 1) {
+      x += (zoneViewSubW * 2);
+      doc.moveTo(x, topY).lineTo(x, bottomY).stroke();
+    }
+    doc.restore();
+
+    doc.fillColor(COLORS.text).font('Helvetica-Bold').fontSize(6.9)
+      .text('Zona 1', margin + 2, yStart + ((zoneViewHeaderH - 8) / 2), {
+        width: zoneViewFirstW - 4,
+        align: 'center',
+        lineBreak: false,
+        ellipsis: true,
+      });
+
+    matrixDayDefs.forEach(([weekday, label], dayIndex) => {
+      const dayX = margin + zoneViewFirstW + (dayIndex * zoneViewSubW * 2);
+      doc.fillColor(COLORS.text).font('Helvetica-Bold').fontSize(6.9)
+        .text(label, dayX + 2, yStart + 3, {
+          width: (zoneViewSubW * 2) - 4,
+          align: 'center',
+          lineBreak: false,
+          ellipsis: true,
+        });
+      doc.fillColor(COLORS.text).font('Helvetica-Bold').fontSize(6.3)
+        .text('Zona 2', dayX + 2, splitY + 3, {
+          width: zoneViewSubW - 4,
+          align: 'center',
+          lineBreak: false,
+          ellipsis: true,
+        });
+      doc.text('Empreiteiro', dayX + zoneViewSubW + 2, splitY + 3, {
+        width: zoneViewSubW - 4,
+        align: 'center',
+        lineBreak: false,
+        ellipsis: true,
+      });
+    });
+
+    return yStart + zoneViewHeaderH;
+  };
+
+  const buildZoneViewMergeLookup = (rowsSlice) => {
+    const lookup = new Map();
+    const blocks = [];
+    zoneViewColumns.forEach((col) => {
+      const key = String(col.key || '');
+      let idx = 0;
+      while (idx < rowsSlice.length) {
+        const startValue = String(rowsSlice[idx][key] || '').trim();
+        const startGroup = String(rowsSlice[idx].__group || '');
+        if (!startValue) {
+          idx += 1;
+          continue;
+        }
+        let end = idx;
+        while (end + 1 < rowsSlice.length) {
+          const nextValue = String(rowsSlice[end + 1][key] || '').trim();
+          const nextGroup = String(rowsSlice[end + 1].__group || '');
+          if (nextValue !== startValue || nextGroup !== startGroup) break;
+          end += 1;
+        }
+        if (end > idx) {
+          blocks.push({ key, start: idx, end });
+          for (let i = idx; i <= end; i += 1) {
+            lookup.set(`${key}|${i}`, { start: idx, end });
+          }
+        }
+        idx = end + 1;
+      }
+    });
+    return { lookup, blocks };
+  };
+
+  const drawZoneViewGridSlice = (rowsSlice, yStart, globalStartIndex) => {
+    const totalH = rowsSlice.length * zoneViewRowH;
+    const colStarts = [];
+    const colStartMap = new Map();
+    let x = margin;
+    zoneViewColumns.forEach((col) => {
+      colStarts.push(x);
+      colStartMap.set(String(col.key || ''), x);
+      x += col.width;
+    });
+    const { lookup: mergeLookup, blocks: mergeBlocks } = buildZoneViewMergeLookup(rowsSlice);
+    const thickStroke = 1.15;
+    const thinStroke = 0.5;
+
+    rowsSlice.forEach((_, localIdx) => {
+      const rowY = yStart + (localIdx * zoneViewRowH);
+      const rowFill = ((globalStartIndex + localIdx) % 2 === 0) ? COLORS.rowA : COLORS.rowB;
+      doc.save().fillColor(rowFill).rect(margin, rowY, contentWidth, zoneViewRowH).fill().restore();
+    });
+
+    mergeBlocks.forEach((block) => {
+      const col = zoneViewColumns.find((item) => item.key === block.key);
+      if (!col) return;
+      const cellX = colStartMap.get(String(block.key || ''));
+      const cellY = yStart + (block.start * zoneViewRowH);
+      const cellH = ((block.end - block.start) + 1) * zoneViewRowH;
+      const blockFill = ((globalStartIndex + block.start) % 2 === 0) ? COLORS.rowA : COLORS.rowB;
+      doc.save().fillColor(blockFill).rect(cellX, cellY, col.width, cellH).fill().restore();
+    });
+
+    doc.save().strokeColor(COLORS.border).lineWidth(0.55).rect(margin, yStart, contentWidth, totalH).stroke().restore();
+
+    colStarts.slice(1).forEach((colX) => {
+      doc.save().strokeColor(COLORS.border).lineWidth(thinStroke).moveTo(colX, yStart).lineTo(colX, yStart + totalH).stroke().restore();
+    });
+
+    doc.save().strokeColor(COLORS.border).lineWidth(thickStroke);
+    doc.moveTo(margin + zoneViewFirstW, yStart).lineTo(margin + zoneViewFirstW, yStart + totalH).stroke();
+    x = margin + zoneViewFirstW;
+    for (let i = 1; i < 6; i += 1) {
+      x += (zoneViewSubW * 2);
+      doc.moveTo(x, yStart).lineTo(x, yStart + totalH).stroke();
+    }
+    doc.restore();
+
+    const drawStrongZoneBoundary = (lineY) => {
+      doc.save().strokeColor(COLORS.border).lineWidth(thickStroke)
+        .moveTo(margin, lineY).lineTo(margin + contentWidth, lineY).stroke().restore();
+    };
+
+    for (let boundary = 1; boundary < rowsSlice.length; boundary += 1) {
+      const prevGroup = String(rowsSlice[boundary - 1].__group || '');
+      const nextGroup = String(rowsSlice[boundary].__group || '');
+      if (prevGroup && nextGroup && prevGroup !== nextGroup) {
+        const lineY = yStart + (boundary * zoneViewRowH);
+        drawStrongZoneBoundary(lineY);
+      }
+    }
+
+    for (let boundary = 1; boundary < rowsSlice.length; boundary += 1) {
+      const lineY = yStart + (boundary * zoneViewRowH);
+      zoneViewColumns.forEach((col, colIdx) => {
+        const key = String(col.key || '');
+        const merge = mergeLookup.get(`${key}|${boundary - 1}`) || null;
+        const mergesAcrossBoundary = Boolean(merge && merge.end >= boundary);
+        if (mergesAcrossBoundary) return;
+        const prevGroup = String(rowsSlice[boundary - 1].__group || '');
+        const nextGroup = String(rowsSlice[boundary].__group || '');
+        if (prevGroup && nextGroup && prevGroup !== nextGroup) return;
+        const x1 = colStarts[colIdx];
+        const x2 = x1 + col.width;
+        doc.save().strokeColor(COLORS.border).lineWidth(thinStroke).moveTo(x1, lineY).lineTo(x2, lineY).stroke().restore();
+      });
+    }
+
+    rowsSlice.forEach((row, localIdx) => {
+      zoneViewColumns.forEach((col, colIdx) => {
+        const key = String(col.key || '');
+        const rawText = String(row[key] || '');
+        if (!rawText.trim()) return;
+        const merge = mergeLookup.get(`${key}|${localIdx}`) || null;
+        if (merge && merge.start !== localIdx) return;
+
+        const spanStart = merge ? merge.start : localIdx;
+        const spanEnd = merge ? merge.end : localIdx;
+        const cellY = yStart + (spanStart * zoneViewRowH);
+        const cellH = ((spanEnd - spanStart) + 1) * zoneViewRowH;
+        const cellX = colStarts[colIdx];
+        const cellW = col.width;
+        const textH = doc.heightOfString(rawText, { width: cellW - 4, lineBreak: false });
+        const textY = cellY + ((cellH - Math.min(textH, cellH - 4)) / 2);
+        doc.fillColor(COLORS.text).font('Helvetica').fontSize(6.4)
+          .text(rawText, cellX + 2, textY, {
+            width: cellW - 4,
+            align: 'center',
+            lineBreak: false,
+            ellipsis: true,
+          });
+      });
+    });
+  };
+
+  doc.addPage();
+  y = drawPpcPageHeader();
+  y = drawZoneViewSectionTitle(y);
+  y = drawZoneViewHeader(y);
+  if (!zoneContractorMatrixRows.length) {
+    drawZoneViewGridSlice([emptyZoneViewRow], y, 0);
+  } else {
+    let cursor = 0;
+    while (cursor < zoneContractorMatrixRows.length) {
+      const available = pageBottom() - 10 - y;
+      const rowsFit = Math.max(1, Math.floor(available / zoneViewRowH));
+      const slice = zoneContractorMatrixRows.slice(cursor, cursor + rowsFit);
+      drawZoneViewGridSlice(slice, y, cursor);
+      cursor += slice.length;
+      if (cursor < zoneContractorMatrixRows.length) {
+        doc.addPage();
+        y = drawPpcPageHeader();
+        y = drawZoneViewSectionTitle(y);
+        y = drawZoneViewHeader(y);
       }
     }
   }

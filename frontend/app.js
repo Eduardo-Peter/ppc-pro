@@ -11205,8 +11205,9 @@ function sheetDuplicateActivityIssues(operations = []) {
     const description = normalizeSearchText(payload.description || '');
     const contractorId = Number(payload.contractorId) || 0;
     const location1 = normalizeSearchText(payload.locationLevel1 || '');
+    const location2 = normalizeSearchText(payload.locationLevel2 || '');
     if (!description || !contractorId || !location1) return;
-    const key = `${contractorId}__${location1}__${description}`;
+    const key = `${contractorId}__${location1}__${location2}__${description}`;
     const bucket = groups.get(key) || [];
     bucket.push(item.label);
     groups.set(key, bucket);
@@ -11332,7 +11333,7 @@ async function handleSaveWeekSheet(options = {}) {
     const duplicateIssues = sheetDuplicateActivityIssues(operations);
     if (duplicateIssues.length) {
       const lines = duplicateIssues.map((labels, index) => `Duplicidade ${index + 1}: ${labels.join(', ')}`);
-      const message = 'Não foi possível salvar a programação semanal. Existem atividades duplicadas para o mesmo empreiteiro, mesmo Local 1 e mesma descrição.';
+      const message = 'Não foi possível salvar a programação semanal. Existem atividades duplicadas para o mesmo empreiteiro, mesma descrição, mesmo Local 1 e mesmo Local 2.';
       openPlanningValidationModal(message, lines, { title: 'Atividades duplicadas' });
       setStatus('Salvamento bloqueado: existem atividades duplicadas na planilha.', true);
       return;
