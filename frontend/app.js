@@ -567,6 +567,30 @@ function closePlanningSaveProgressModal() {
   updatePlanningSaveProgress(0, 'Preparando salvamento...');
 }
 
+function updateFeedbackSaveProgress(progress = 0, message = 'Salvando...') {
+  const bar = $('#feedbackSaveProgressBar');
+  const percentEl = $('#feedbackSaveProgressPercent');
+  const messageEl = $('#feedbackSaveProgressMessage');
+  const safeProgress = Math.max(0, Math.min(100, Number(progress) || 0));
+  if (bar) bar.style.width = `${safeProgress}%`;
+  if (percentEl) percentEl.textContent = `${Math.round(safeProgress)}%`;
+  if (messageEl) messageEl.textContent = message;
+}
+
+function openFeedbackSaveProgressModal(progress = 0, message = 'Preparando salvamento...') {
+  const modal = $('#feedbackSaveProgressModal');
+  if (!modal) return;
+  updateFeedbackSaveProgress(progress, message);
+  modal.classList.remove('hidden');
+}
+
+function closeFeedbackSaveProgressModal() {
+  const modal = $('#feedbackSaveProgressModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  updateFeedbackSaveProgress(0, 'Preparando salvamento...');
+}
+
 function toggleTemporaryDisabled(elements, disabled, stateKey) {
   elements.forEach((el) => {
     if (!el) return;
@@ -1590,6 +1614,7 @@ function renderWorkWelcomePanel() {
 
   if (statusBody) renderWorkWelcomeStatusTable();
   renderWorkWelcomeActionCards();
+  renderTopWorkflowStrip();
 }
 
 function workWeekByNumber(weekNumber) {
@@ -1734,6 +1759,118 @@ function renderWorkWelcomeStatusTable() {
       )).join('')}
     `;
     body.appendChild(tr);
+  });
+}
+
+function topWorkflowTrackedWeeks() {
+  const current = suggestedCurrentWeekNumberForCurrentWork();
+  if (!current) return [];
+  return [0, 1]
+    .map((offset) => {
+      const weekNumber = Math.max(1, current + offset);
+      const week = workWeekByNumber(weekNumber);
+      return {
+        weekNumber,
+        week,
+        label: offset === 0 ? 'Semana atual' : 'Próxima semana',
+      };
+    })
+    .filter((item, index, arr) => arr.findIndex((row) => row.weekNumber === item.weekNumber) === index);
+}
+
+function navigateFromWorkflowStage(weekNumber, stageKey) {
+  const work = activeWork();
+  if (!work) return;
+  const weekText = String(weekNumber || '');
+  if (stageKey === 'prePlanning') {
+    selectTab('preprogramacao');
+    const input = $('#weekNumber');
+    if (input) input.value = weekText;
+    handleWeekRefresh().catch((error) => setStatus(`Erro ao abrir pré-programação: ${error.message}`, true));
+    return;
+  }
+  if (stageKey === 'ppcMeeting') {
+    selectTab('reuniaoppc');
+    const input = $('#ppcMeetingWeekNumber');
+    if (input) input.value = weekText;
+    refreshPpcMeetingTab({ useDefaultNext: false, silent: true }).catch((error) => setStatus(`Erro ao abrir reunião de PPC: ${error.message}`, true));
+    return;
+  }
+  if (stageKey === 'planning') {
+    selectTab('programacao');
+    const input = $('#weekNumber');
+    if (input) input.value = weekText;
+    handleWeekRefresh().catch((error) => setStatus(`Erro ao abrir programação: ${error.message}`, true));
+    return;
+  }
+  if (stageKey === 'feedback') {
+    selectTab('feedback');
+    const input = $('#feedbackWeekNumber');
+    if (input) input.value = weekText;
+    refreshFeedbackTab({ useDefaultPrevious: false, silent: true }).catch((error) => setStatus(`Erro ao abrir feedback: ${error.message}`, true));
+    return;
+  }
+  if (stageKey === 'quality') {
+    selectTab('qualidade');
+    const input = $('#qualityWeekNumber');
+    if (input) input.value = weekText;
+    refreshQualityTab({ useDefaultCurrent: false, silent: true }).catch((error) => setStatus(`Erro ao abrir qualidade percebida: ${error.message}`, true));
+  }
+}
+
+function renderTopWorkflowStrip() {
+  const host = $('#topWorkflowStrip');
+  if (!host) return;
+  if (!state.user || !state.selectedWorkId) {
+    host.innerHTML = '';
+    host.classList.add('hidden');
+    return;
+  }
+  const rows = topWorkflowTrackedWeeks();
+  if (!rows.length) {
+    host.innerHTML = '';
+    host.classList.add('hidden');
+    return;
+  }
+  const stageMap = [
+    ['prePlanning', 'Pré'],
+    ['ppcMeeting', 'Reunião'],
+    ['planning', 'Prog.'],
+    ['feedback', 'Feedback'],
+    ['quality', 'Qualid.'],
+  ];
+  host.classList.remove('hidden');
+  host.innerHTML = rows.map(({ label, weekNumber, week }) => `
+    <div class="top-workflow-card">
+      <h4>${escapeHtml(label)} - Sem. ${escapeHtml(String(weekNumber))}</h4>
+      <small>${escapeHtml(formatDate(week?.startDate))} a ${escapeHtml(formatDate(week?.endDate))}</small>
+      <div class="top-workflow-stages">
+        ${stageMap.map(([stageKey, stageLabel]) => {
+          const stage = homeStageStatus(week, stageKey);
+          return `
+            <button
+              type="button"
+              class="top-workflow-stage ${escapeHtml(stage.variant)}"
+              data-workflow-week="${escapeHtml(String(weekNumber))}"
+              data-workflow-stage="${escapeHtml(stageKey)}"
+              title="${escapeHtml(stage.title)}"
+            >
+              <strong>${escapeHtml(stageLabel)}</strong>
+              <span>${escapeHtml(stage.mark)}</span>
+            </button>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  host.querySelectorAll('[data-workflow-stage]').forEach((button) => {
+    button.addEventListener('click', () => {
+      navigateFromWorkflowStage(
+        Number(button.getAttribute('data-workflow-week') || 0),
+        String(button.getAttribute('data-workflow-stage') || ''),
+      );
+    });
   });
 }
 
@@ -2456,11 +2593,13 @@ function updateSessionInfo() {
   if (!state.user) {
     $('#sessionInfo').textContent = 'Sem sessão';
     if (logoutBtn) logoutBtn.classList.add('hidden');
+    renderTopWorkflowStrip();
     return;
   }
   const roles = [...state.currentRoles].join(', ');
   $('#sessionInfo').textContent = `${state.user.name} (${roles || 'sem perfil'})`;
   if (logoutBtn) logoutBtn.classList.remove('hidden');
+  renderTopWorkflowStrip();
 }
 
 function renderMainWorkSelect() {
@@ -5034,21 +5173,61 @@ function ppcMeetingWeekSelected() {
 }
 
 function ppcMeetingContractorRows(meeting) {
-  let rows = Array.isArray(meeting?.attendance) ? meeting.attendance : [];
-  if (!rows.length && Array.isArray(state.contractors) && state.contractors.length) {
-    rows = state.contractors
-      .map((contractor) => ({
-        contractorId: contractor.id,
-        contractorName: contractor.name || '-',
-        laborType: contractor.laborType || contractor.function?.name || '-',
-        supervisor: contractor.supervisor || '',
-        communicationEmail: contractor.communicationEmail || '',
-        phone: contractor.phone || '',
-        present: false,
-      }))
-      .sort((a, b) => String(a.contractorName || '').localeCompare(String(b.contractorName || ''), 'pt-BR'));
-  }
-  return rows;
+  return Array.isArray(meeting?.attendance)
+    ? meeting.attendance.slice().sort((a, b) => String(a.contractorName || '').localeCompare(String(b.contractorName || ''), 'pt-BR'))
+    : [];
+}
+
+function renderPpcMeetingAddContractorOptions() {
+  const select = $('#ppcMeetingAddContractorSelect');
+  if (!select) return;
+  const currentIds = new Set(
+    ppcMeetingContractorRows(state.ppcMeetingData).map((row) => Number(row.contractorId || 0)).filter(Boolean),
+  );
+  const available = (state.contractors || [])
+    .filter((contractor) => !currentIds.has(Number(contractor.id)))
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));
+
+  select.innerHTML = '<option value="">Selecione um empreiteiro</option>';
+  available.forEach((contractor) => {
+    const option = document.createElement('option');
+    option.value = String(contractor.id);
+    option.textContent = contractor.name || '-';
+    select.appendChild(option);
+  });
+  select.disabled = available.length === 0;
+}
+
+function addContractorToPpcMeeting() {
+  const select = $('#ppcMeetingAddContractorSelect');
+  if (!select || !state.ppcMeetingData) return;
+  const contractorId = Number.parseInt(select.value || '', 10);
+  if (!contractorId) return;
+  const contractor = (state.contractors || []).find((item) => Number(item.id) === contractorId);
+  if (!contractor) return;
+  if (!Array.isArray(state.ppcMeetingData.attendance)) state.ppcMeetingData.attendance = [];
+  if (state.ppcMeetingData.attendance.some((row) => Number(row.contractorId) === contractorId)) return;
+  state.ppcMeetingData.attendance.push({
+    contractorId,
+    contractorName: contractor.name || '-',
+    laborType: contractor.function?.name || contractor.laborType || '-',
+    supervisor: contractor.supervisor || '',
+    communicationEmail: contractor.communicationEmail || '',
+    phone: contractor.phone || '',
+    present: false,
+    suggested: false,
+    optional: false,
+    manual: true,
+  });
+  renderPpcMeetingTab();
+  setStatus(`Empreiteiro ${contractor.name || contractorId} incluído na reunião.`);
+}
+
+function removeContractorFromPpcMeeting(contractorId) {
+  if (!state.ppcMeetingData || !Array.isArray(state.ppcMeetingData.attendance)) return;
+  state.ppcMeetingData.attendance = state.ppcMeetingData.attendance.filter((row) => Number(row.contractorId) !== Number(contractorId));
+  renderPpcMeetingTab();
+  setStatus('Empreiteiro retirado da reunião.');
 }
 
 function renderPpcMeetingTab() {
@@ -5065,6 +5244,8 @@ function renderPpcMeetingTab() {
   const exportMinutesBtn = $('#ppcMeetingExportMinutesPdfBtn');
   const sendMinutesBtn = $('#ppcMeetingSendMinutesEmailBtn');
   const exportAllPreBtn = $('#ppcMeetingPreExportAllPdfBtn');
+  const addContractorSelect = $('#ppcMeetingAddContractorSelect');
+  const addContractorBtn = $('#ppcMeetingAddContractorBtn');
   const closedInfoEl = $('#ppcMeetingClosedInfo');
   const checklistEl = $('#ppcMeetingChecklistBox');
   if (!preBody || !attendanceBody || !dateInput || !timeInput || !minutesEl) return;
@@ -5094,6 +5275,8 @@ function renderPpcMeetingTab() {
     if (exportMinutesBtn) exportMinutesBtn.disabled = true;
     if (sendMinutesBtn) sendMinutesBtn.disabled = true;
     if (exportAllPreBtn) exportAllPreBtn.disabled = true;
+    if (addContractorSelect) addContractorSelect.disabled = true;
+    if (addContractorBtn) addContractorBtn.disabled = true;
     if ($('#ppcMeetingWeatherStrip')) {
       $('#ppcMeetingWeatherStrip').innerHTML = '<div class="weather-inline-empty">Sem previsão para a semana selecionada.</div>';
     }
@@ -5136,6 +5319,7 @@ function renderPpcMeetingTab() {
   if (exportMinutesBtn) exportMinutesBtn.disabled = !closed;
   if (sendMinutesBtn) sendMinutesBtn.disabled = !closed;
   if (exportAllPreBtn) exportAllPreBtn.disabled = !prePlanningClosed;
+  if (addContractorBtn) addContractorBtn.disabled = closed || !prePlanningClosed;
   if (closedInfoEl) {
     if (!prePlanningClosed) {
       closedInfoEl.className = 'ppc-meeting-status ppc-meeting-status--blocked';
@@ -5152,6 +5336,10 @@ function renderPpcMeetingTab() {
   }
 
   const rows = ppcMeetingContractorRows(meeting);
+  renderPpcMeetingAddContractorOptions();
+  if (addContractorSelect) {
+    addContractorSelect.disabled = closed || !prePlanningClosed || addContractorSelect.options.length <= 1;
+  }
   renderPpcMeetingWeatherMini();
   renderPpcMeetingMiniCalendar();
   if (checklistEl) {
@@ -5169,7 +5357,7 @@ function renderPpcMeetingTab() {
       },
       {
         title: 'Empreiteiros ativos',
-        helper: rows.length ? `${rows.length} empreiteiro(s) carregado(s) para a semana.` : 'Nenhum empreiteiro ativo identificado.',
+        helper: rows.length ? `${rows.length} empreiteiro(s) listado(s) para a semana.` : 'Nenhum empreiteiro listado para esta reunião.',
         variant: rows.length ? 'ok' : 'waiting',
       },
       {
@@ -5199,8 +5387,11 @@ function renderPpcMeetingTab() {
       <td>${escapeHtml(row.communicationEmail || '-')}</td>
       <td>
         <div class="actions-inline">
+          ${row.optional ? '<span class="inline-badge">Reserva</span>' : ''}
+          ${row.manual ? '<span class="inline-badge inline-badge--manual">Manual</span>' : ''}
           <button type="button" class="secondary" data-ppc-pre-activity-pdf="${row.contractorId}" data-contractor-name="${escapeHtml(row.contractorName || '')}" ${prePlanningClosed ? '' : 'disabled'}>PDF atividades</button>
           <button type="button" class="secondary" data-ppc-pre-convocation-pdf="${row.contractorId}" data-contractor-name="${escapeHtml(row.contractorName || '')}" ${prePlanningClosed ? '' : 'disabled'}>PDF convocação</button>
+          <button type="button" class="secondary" data-ppc-remove-contractor="${row.contractorId}" ${closed || !prePlanningClosed ? 'disabled' : ''}>Retirar</button>
         </div>
       </td>
     `;
@@ -5213,6 +5404,12 @@ function renderPpcMeetingTab() {
       <td><input type="checkbox" class="ppc-presence-checkbox" data-contractor-id="${row.contractorId}" ${row.present ? 'checked' : ''} ${(closed || !prePlanningClosed) ? 'disabled' : ''} /></td>
     `;
     attendanceBody.appendChild(trAttendance);
+  });
+
+  preBody.querySelectorAll('[data-ppc-remove-contractor]').forEach((button) => {
+    button.addEventListener('click', () => {
+      removeContractorFromPpcMeeting(Number(button.getAttribute('data-ppc-remove-contractor') || 0));
+    });
   });
 }
 
@@ -6581,6 +6778,8 @@ function dashboardBarRowsHtml(items, valueFormatter = (value) => `${Number(value
 function renderDashboard(data) {
   const kpi = $('#dashboardPpcKpiRow');
   const causes = $('#causesList');
+  const contractorRawBars = $('#dashboardContractorRawBars');
+  const contractorRawMetaLabel = $('#dashboardContractorRawMetaLabel');
   const contractorBars = $('#dashboardContractorBars');
   const contractorMetaLabel = $('#dashboardContractorMetaLabel');
   const laborTypeBars = $('#dashboardLaborTypeBars');
@@ -6600,15 +6799,17 @@ function renderDashboard(data) {
     return `<span class="dashboard-face ${mood}">${face}</span> <span>${escapeHtml(scoreText)}</span>`;
   };
 
-  [kpi, causes, contractorBars, contractorMetaLabel, laborTypeBars, laborTypeMetaLabel, rankingBody, perceivedQualityBody, accessBody].forEach((el) => {
+  [kpi, causes, contractorRawBars, contractorRawMetaLabel, contractorBars, contractorMetaLabel, laborTypeBars, laborTypeMetaLabel, rankingBody, perceivedQualityBody, accessBody].forEach((el) => {
     if (el) el.innerHTML = '';
   });
 
   if (!data || !data.summary) {
     if (kpi) kpi.innerHTML = '<div class="kpi"><label>Sem dados</label><strong>-</strong></div>';
     if (causes) causes.innerHTML = '<li>Sem permissão ou sem dados.</li>';
+    if (contractorRawBars) contractorRawBars.innerHTML = '<div class="chart-bar-label">Sem dados.</div>';
     if (contractorBars) contractorBars.innerHTML = '<div class="chart-bar-label">Sem dados.</div>';
     if (laborTypeBars) laborTypeBars.innerHTML = '<div class="chart-bar-label">Sem dados.</div>';
+    if (contractorRawMetaLabel) contractorRawMetaLabel.textContent = '';
     if (contractorMetaLabel) contractorMetaLabel.textContent = '';
     if (laborTypeMetaLabel) laborTypeMetaLabel.textContent = '';
     if (rankingBody) rankingBody.innerHTML = '<tr><td colspan="6">Sem dados.</td></tr>';
@@ -6644,12 +6845,30 @@ function renderDashboard(data) {
     `;
   }
 
+  if (contractorRawBars) {
+    const contractorItems = Array.isArray(data.contractorPpcRows) && data.contractorPpcRows.length
+      ? data.contractorPpcRows
+      : [];
+    if (contractorRawMetaLabel) {
+      contractorRawMetaLabel.textContent = `PPC bruto da semana: atividades planejadas executadas / atividades planejadas. Meta da obra: ${formatPercentBr2(ppcTargetPct)}.`;
+    }
+    contractorRawBars.innerHTML = dashboardBarRowsHtml(
+      contractorItems.map((item) => ({
+        label: item.contractor,
+        pct: Number(item.executionPct || 0),
+        color: '#2477c4',
+      })),
+      (value) => formatPercentBr2(value),
+      { targetPct: ppcTargetPct },
+    );
+  }
+
   if (contractorBars) {
     const contractorItems = Array.isArray(data.contractorRanking) && data.contractorRanking.length
       ? data.contractorRanking
       : [];
     if (contractorMetaLabel) {
-      contractorMetaLabel.textContent = `Meta de referência da obra: ${formatPercentBr2(ppcTargetPct)} (linha vertical)`;
+      contractorMetaLabel.textContent = 'Performance ajustada: 100% - % de não cumprimento por causa específica do empreiteiro.';
     }
     contractorBars.innerHTML = dashboardBarRowsHtml(
       contractorItems.map((item) => ({
@@ -6658,7 +6877,6 @@ function renderDashboard(data) {
         color: '#2f8f65',
       })),
       (value) => formatPercentBr2(value),
-      { targetPct: ppcTargetPct },
     );
   }
 
@@ -10589,6 +10807,9 @@ async function handleFeedback(event, options = {}) {
   try {
     state.feedbackSaveInProgress = true;
     setFeedbackSavingLock(true);
+    if (!options.autosave) {
+      openFeedbackSaveProgressModal(8, 'Preparando dados do feedback...');
+    }
     const week = activeWeek();
     if (!week) throw new Error('Semana não selecionada.');
     if (String(week.planningStatus || '').toUpperCase() !== 'CLOSED') {
@@ -10672,6 +10893,7 @@ async function handleFeedback(event, options = {}) {
     }
     if (!items.length) throw new Error('Nenhum item de feedback foi preenchido.');
 
+    if (!options.autosave) updateFeedbackSaveProgress(40, 'Enviando feedback para o servidor...');
     await api(`/weeks/${state.selectedWeekId}/feedback`, {
       method: 'POST',
       body: {
@@ -10679,10 +10901,12 @@ async function handleFeedback(event, options = {}) {
         items,
       },
     });
+    if (!options.autosave) updateFeedbackSaveProgress(76, 'Recarregando semana e validações...');
     await loadWeeks();
     const feedbackWeekInput = $('#feedbackWeekNumber');
     if (feedbackWeekInput) feedbackWeekInput.value = String(week.weekNumber || '');
     await refreshFeedbackTab({ useDefaultPrevious: false, silent: true });
+    if (!options.autosave) updateFeedbackSaveProgress(100, 'Salvamento concluído.');
     clearScreenDirty('feedback');
     if (!options.autosave) closeFeedbackValidationModal();
     if (options.autosave) {
@@ -10723,6 +10947,11 @@ async function handleFeedback(event, options = {}) {
     setStatus(translateApiError(error.message, 'Erro ao salvar feedback'), true);
     return false;
   } finally {
+    if (!options.autosave) {
+      window.setTimeout(() => {
+        closeFeedbackSaveProgressModal();
+      }, 250);
+    }
     state.feedbackSaveInProgress = false;
     setFeedbackSavingLock(false);
   }
@@ -11646,6 +11875,7 @@ function bindEvents() {
     refreshPpcMeetingTab({ useDefaultNext: false, silent: false })
       .catch((error) => setStatus(`Erro ao atualizar reunião de PPC: ${error.message}`, true));
   });
+  $('#ppcMeetingAddContractorBtn')?.addEventListener('click', addContractorToPpcMeeting);
   $('#ppcMeetingDate').addEventListener('input', () => {
     const input = $('#ppcMeetingDate');
     if (!input) return;

@@ -365,6 +365,22 @@ async function ensureFutureWeeksForWork(workId, workStartDate, baseWeekNumber, t
 async function rollPendingTasksToNextWeek(sourceWeek, nextWeek) {
   if (!sourceWeek?.id || !nextWeek?.id) return { rolledCount: 0, rolledTaskIds: [] };
 
+  const normalizeText = (value) => String(value || '').trim().replace(/\s+/g, ' ').toUpperCase();
+  const normalizeDateKey = (value) => {
+    if (!value) return '';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toISOString().slice(0, 10);
+  };
+  const sameCarryoverIdentity = (left, right) => (
+    Number(left?.originWeekId || 0) === Number(right?.originWeekId || 0)
+    && Number(left?.contractorId || 0) === Number(right?.contractorId || 0)
+    && Number(left?.locationId || 0) === Number(right?.locationId || 0)
+    && normalizeText(left?.description) === normalizeText(right?.description)
+    && normalizeDateKey(left?.plannedStart) === normalizeDateKey(right?.plannedStart)
+    && normalizeDateKey(left?.plannedEnd) === normalizeDateKey(right?.plannedEnd)
+  );
+
   const pending = await prisma.task.findMany({
     where: {
       currentWeekId: sourceWeek.id,
@@ -372,12 +388,44 @@ async function rollPendingTasksToNextWeek(sourceWeek, nextWeek) {
     },
     include: {
       plannedDays: true,
-      rolledToTasks: { where: { currentWeekId: nextWeek.id }, select: { id: true } },
     },
     orderBy: { sequenceNumber: 'asc' },
   });
 
-  const toRoll = pending.filter((item) => item.rolledToTasks.length === 0);
+  const [existingNextWeekPreTasks, existingNextWeekTasks] = await Promise.all([
+    prisma.preTask.findMany({
+      where: { weekId: nextWeek.id },
+      select: {
+        id: true,
+        originWeekId: true,
+        contractorId: true,
+        locationId: true,
+        description: true,
+        plannedStart: true,
+        plannedEnd: true,
+        status: true,
+      },
+    }),
+    prisma.task.findMany({
+      where: { currentWeekId: nextWeek.id },
+      select: {
+        id: true,
+        originWeekId: true,
+        contractorId: true,
+        locationId: true,
+        description: true,
+        plannedStart: true,
+        plannedEnd: true,
+        status: true,
+      },
+    }),
+  ]);
+
+  const toRoll = pending.filter((item) => {
+    const alreadyExistsInPrePlanning = existingNextWeekPreTasks.some((nextItem) => sameCarryoverIdentity(nextItem, item));
+    const alreadyExistsInPlanning = existingNextWeekTasks.some((nextItem) => sameCarryoverIdentity(nextItem, item));
+    return !alreadyExistsInPrePlanning && !alreadyExistsInPlanning;
+  });
   if (!toRoll.length) return { rolledCount: 0, rolledTaskIds: [] };
 
   const maxSeq = await prisma.preTask.findFirst({
@@ -741,7 +789,8 @@ function computePerceivedQualityRow({
   contractor,
   config,
   metric,
-  presenceScore,
+  presenceWeight,
+  isPresentAtMeeting,
 }) {
   const deadlineRegular = Number(config?.deadlineRegularPct ?? 60);
   const deadlineGood = Number(config?.deadlineGoodPct ?? 80);
@@ -760,9 +809,14 @@ function computePerceivedQualityRow({
   const collaborationTeamScore = normalizeQualityScore(item?.collaborationTeamScore);
   const safetyScore = normalizeQualityScore(item?.safetyScore);
   const cleaningScore = normalizeQualityScore(item?.cleaningScore);
+  const safePresenceWeight = Math.max(0, Math.min(10, Number(presenceWeight || 0)));
+  const collaborationEvaluationWeight = Math.max(0, 10 - safePresenceWeight);
   const collaborationFinalScore = collaborationTeamScore === null
     ? null
-    : round2((collaborationTeamScore + Number(presenceScore || 0)) / 2);
+    : round2(
+      ((isPresentAtMeeting ? 1 : 0) * safePresenceWeight)
+      + ((Number(collaborationTeamScore || 0) / 10) * collaborationEvaluationWeight),
+    );
 
   const canComputeOverall = [qualityScore, collaborationFinalScore, safetyScore, cleaningScore]
     .every((value) => value !== null && value !== undefined);
@@ -792,7 +846,7 @@ function computePerceivedQualityRow({
     laborType: contractor.function?.name || null,
     deadlinePpcPct: deadlinePct,
     deadlineBand: classifyByThreshold(deadlinePct, deadlineRegular, deadlineGood),
-    presenceScore: Number(presenceScore || 0),
+    presenceScore: isPresentAtMeeting ? safePresenceWeight : 0,
     qualityScore,
     qualityBand: qualityScore === null ? '-' : classifyByThreshold(qualityScore, qualityRegular, qualityGood),
     collaborationTeamScore,
@@ -843,7 +897,13 @@ async function buildPerceivedQualityWeekPayload(weekId) {
       qualityClosedBy: { select: { id: true, name: true, email: true } },
       feedbackClosedBy: { select: { id: true, name: true, email: true } },
       ppcMeeting: {
-        include: { attendances: true },
+        include: {
+          attendances: {
+            include: {
+              contractor: { include: { function: true } },
+            },
+          },
+        },
       },
     },
   });
@@ -909,13 +969,13 @@ async function buildPerceivedQualityWeekPayload(weekId) {
       const contractorId = Number(contractor.id);
       const item = itemByContractor.get(contractorId) || null;
       const present = attendanceMap.get(contractorId) === true;
-      const presenceScore = present ? presenceImpactScore : 0;
       return computePerceivedQualityRow({
         item,
         contractor,
         config,
         metric: metricsByContractor.get(contractorId) || null,
-        presenceScore,
+        presenceWeight: presenceImpactScore,
+        isPresentAtMeeting: present,
       });
     });
 
@@ -1017,11 +1077,62 @@ async function listActiveContractorsByWeek(weekId, workId) {
     const contractor = item.contractor;
     if (!contractor?.id) return;
     if (Number(contractor.workId) !== Number(workId)) return;
-    if (!byId.has(contractor.id)) byId.set(contractor.id, contractor);
+    if (!byId.has(contractor.id)) {
+      byId.set(contractor.id, {
+        ...contractor,
+        meetingSuggested: true,
+        meetingOptional: true,
+      });
+    }
+    const entry = byId.get(contractor.id);
+    const status = String(item.status || '').toUpperCase();
+    if (status !== TASK_STATUS.RESERVA) {
+      entry.meetingOptional = false;
+    }
   });
 
   return [...byId.values()]
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));
+}
+
+function buildPpcMeetingContractorList(suggestedContractors, attendances = []) {
+  const rows = [];
+  const byId = new Map();
+  const attendanceMap = new Map(
+    (attendances || []).map((item) => [Number(item.contractorId), item]),
+  );
+  const hasPersistedSelection = attendanceMap.size > 0;
+
+  (suggestedContractors || []).forEach((contractor) => {
+    const contractorId = Number(contractor.id || 0);
+    if (!contractorId) return;
+    const isOptional = contractor.meetingOptional === true;
+    if (isOptional && hasPersistedSelection && !attendanceMap.has(contractorId)) {
+      return;
+    }
+    byId.set(contractorId, {
+      ...contractor,
+      meetingSuggested: contractor.meetingSuggested !== false,
+      meetingOptional: isOptional,
+      meetingManual: false,
+    });
+  });
+
+  (attendances || []).forEach((attendance) => {
+    const contractor = attendance?.contractor || null;
+    if (!contractor?.id) return;
+    const contractorId = Number(contractor.id);
+    const existing = byId.get(contractorId);
+    byId.set(contractorId, {
+      ...(existing || contractor),
+      meetingSuggested: existing ? existing.meetingSuggested : false,
+      meetingOptional: existing ? existing.meetingOptional : false,
+      meetingManual: !existing,
+    });
+  });
+
+  byId.forEach((value) => rows.push(value));
+  return rows.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'));
 }
 
 function serializePpcMeeting(meeting, week, contractors, suggestedMeetingAt = null) {
@@ -1040,6 +1151,9 @@ function serializePpcMeeting(meeting, week, contractors, suggestedMeetingAt = nu
       phone: contact.phone || '',
       present: attendance?.present === true,
       attendanceId: attendance?.id || null,
+      suggested: contractor.meetingSuggested !== false,
+      optional: contractor.meetingOptional === true,
+      manual: contractor.meetingManual === true,
     };
   });
 
@@ -2638,42 +2752,31 @@ router.get('/weeks/:weekId/ppc-meeting', authenticate, loadUser, requireWeekRole
 
   let meeting = await prisma.weekPpcMeeting.findUnique({
     where: { weekId: week.id },
-    include: { attendances: true, closedBy: { select: { name: true } } },
+    include: {
+      attendances: {
+        include: {
+          contractor: { include: { function: true } },
+        },
+      },
+      closedBy: { select: { name: true } },
+    },
   });
   if (!meeting) {
     meeting = await prisma.weekPpcMeeting.create({
       data: { weekId: week.id },
-      include: { attendances: true, closedBy: { select: { name: true } } },
+      include: {
+        attendances: {
+          include: {
+            contractor: { include: { function: true } },
+          },
+        },
+        closedBy: { select: { name: true } },
+      },
     });
   }
 
-  const contractors = await listActiveContractorsByWeek(week.id, week.workId);
-  const missingAttendanceRows = contractors
-    .filter((contractor) => !meeting.attendances.some((item) => Number(item.contractorId) === Number(contractor.id)))
-    .map((contractor) => ({
-      meetingId: meeting.id,
-      contractorId: contractor.id,
-      present: false,
-    }));
-  if (missingAttendanceRows.length) {
-    for (const row of missingAttendanceRows) {
-      // eslint-disable-next-line no-await-in-loop
-      await prisma.ppcMeetingAttendance.upsert({
-        where: {
-          meetingId_contractorId: {
-            meetingId: row.meetingId,
-            contractorId: row.contractorId,
-          },
-        },
-        create: row,
-        update: {},
-      });
-    }
-    meeting = await prisma.weekPpcMeeting.findUnique({
-      where: { id: meeting.id },
-      include: { attendances: true, closedBy: { select: { name: true } } },
-    });
-  }
+  const suggestedContractors = await listActiveContractorsByWeek(week.id, week.workId);
+  const contractors = buildPpcMeetingContractorList(suggestedContractors, meeting.attendances || []);
 
   let suggestedMeetingAt = null;
   if (!meeting.meetingAt) {
@@ -2708,10 +2811,24 @@ router.put('/weeks/:weekId/ppc-meeting/pre', authenticate, loadUser, requireWeek
 
   const current = await prisma.weekPpcMeeting.findUnique({
     where: { weekId: req.week.id },
-    include: { attendances: true, closedBy: { select: { name: true } } },
+    include: {
+      attendances: {
+        include: {
+          contractor: { include: { function: true } },
+        },
+      },
+      closedBy: { select: { name: true } },
+    },
   }) || await prisma.weekPpcMeeting.create({
     data: { weekId: req.week.id },
-    include: { attendances: true, closedBy: { select: { name: true } } },
+    include: {
+      attendances: {
+        include: {
+          contractor: { include: { function: true } },
+        },
+      },
+      closedBy: { select: { name: true } },
+    },
   });
 
   if (current.isClosed) return res.status(409).json({ error: 'ppc_meeting_closed' });
@@ -2719,10 +2836,18 @@ router.put('/weeks/:weekId/ppc-meeting/pre', authenticate, loadUser, requireWeek
   const updated = await prisma.weekPpcMeeting.update({
     where: { id: current.id },
     data: { meetingAt },
-    include: { attendances: true, closedBy: { select: { name: true } } },
+    include: {
+      attendances: {
+        include: {
+          contractor: { include: { function: true } },
+        },
+      },
+      closedBy: { select: { name: true } },
+    },
   });
 
-  const contractors = await listActiveContractorsByWeek(req.week.id, req.workId);
+  const suggestedContractors = await listActiveContractorsByWeek(req.week.id, req.workId);
+  const contractors = buildPpcMeetingContractorList(suggestedContractors, updated.attendances || []);
   return res.json(serializePpcMeeting(updated, req.week, contractors));
 }));
 
@@ -2736,19 +2861,39 @@ router.put('/weeks/:weekId/ppc-meeting/post', authenticate, loadUser, requireWee
 
   const current = await prisma.weekPpcMeeting.findUnique({
     where: { weekId: req.week.id },
-    include: { attendances: true, closedBy: { select: { name: true } } },
+    include: {
+      attendances: {
+        include: {
+          contractor: { include: { function: true } },
+        },
+      },
+      closedBy: { select: { name: true } },
+    },
   }) || await prisma.weekPpcMeeting.create({
     data: { weekId: req.week.id },
-    include: { attendances: true, closedBy: { select: { name: true } } },
+    include: {
+      attendances: {
+        include: {
+          contractor: { include: { function: true } },
+        },
+      },
+      closedBy: { select: { name: true } },
+    },
   });
   if (current.isClosed) return res.status(409).json({ error: 'ppc_meeting_closed' });
 
-  const contractors = await listActiveContractorsByWeek(req.week.id, req.workId);
-  const contractorIdSet = new Set(contractors.map((item) => Number(item.id)));
+  const allWorkContractors = await prisma.contractor.findMany({
+    where: { workId: req.workId },
+    include: { function: true },
+    orderBy: { name: 'asc' },
+  });
+  const contractorIdSet = new Set(allWorkContractors.map((item) => Number(item.id)));
+  const selectedIds = new Set();
 
   for (const row of attendanceItems) {
     const contractorId = parseIntId(row.contractorId);
     if (!contractorId || !contractorIdSet.has(contractorId)) continue;
+    selectedIds.add(contractorId);
     // eslint-disable-next-line no-await-in-loop
     await prisma.ppcMeetingAttendance.upsert({
       where: { meetingId_contractorId: { meetingId: current.id, contractorId } },
@@ -2763,12 +2908,30 @@ router.put('/weeks/:weekId/ppc-meeting/post', authenticate, loadUser, requireWee
     });
   }
 
+  await prisma.ppcMeetingAttendance.deleteMany({
+    where: {
+      meetingId: current.id,
+      contractorId: {
+        notIn: [...selectedIds],
+      },
+    },
+  });
+
   const updated = await prisma.weekPpcMeeting.update({
     where: { id: current.id },
     data: { minutes },
-    include: { attendances: true, closedBy: { select: { name: true } } },
+    include: {
+      attendances: {
+        include: {
+          contractor: { include: { function: true } },
+        },
+      },
+      closedBy: { select: { name: true } },
+    },
   });
 
+  const suggestedContractors = await listActiveContractorsByWeek(req.week.id, req.workId);
+  const contractors = buildPpcMeetingContractorList(suggestedContractors, updated.attendances || []);
   return res.json(serializePpcMeeting(updated, req.week, contractors));
 }));
 
@@ -2779,7 +2942,14 @@ router.post('/weeks/:weekId/ppc-meeting/close', authenticate, loadUser, requireW
 
   const current = await prisma.weekPpcMeeting.findUnique({
     where: { weekId: req.week.id },
-    include: { attendances: true, closedBy: { select: { name: true } } },
+    include: {
+      attendances: {
+        include: {
+          contractor: { include: { function: true } },
+        },
+      },
+      closedBy: { select: { name: true } },
+    },
   });
   if (!current) return res.status(404).json({ error: 'ppc_meeting_not_found' });
   if (current.isClosed) return res.status(409).json({ error: 'ppc_meeting_already_closed' });
@@ -2792,7 +2962,14 @@ router.post('/weeks/:weekId/ppc-meeting/close', authenticate, loadUser, requireW
       closedAt: new Date(),
       closedById: req.user.id,
     },
-    include: { attendances: true, closedBy: { select: { name: true } } },
+    include: {
+      attendances: {
+        include: {
+          contractor: { include: { function: true } },
+        },
+      },
+      closedBy: { select: { name: true } },
+    },
   });
 
   await writeAudit({
@@ -2804,14 +2981,22 @@ router.post('/weeks/:weekId/ppc-meeting/close', authenticate, loadUser, requireW
     description: `Reunião de PPC da semana ${req.week.weekNumber} fechada.`,
   });
 
-  const contractors = await listActiveContractorsByWeek(req.week.id, req.workId);
+  const suggestedContractors = await listActiveContractorsByWeek(req.week.id, req.workId);
+  const contractors = buildPpcMeetingContractorList(suggestedContractors, updated.attendances || []);
   return res.json(serializePpcMeeting(updated, req.week, contractors));
 }));
 
 router.post('/weeks/:weekId/ppc-meeting/reopen', authenticate, loadUser, requireWeekRoles([ROLES.ADMIN]), asyncHandler(async (req, res) => {
   const current = await prisma.weekPpcMeeting.findUnique({
     where: { weekId: req.week.id },
-    include: { attendances: true, closedBy: { select: { name: true } } },
+    include: {
+      attendances: {
+        include: {
+          contractor: { include: { function: true } },
+        },
+      },
+      closedBy: { select: { name: true } },
+    },
   });
   if (!current) return res.status(404).json({ error: 'ppc_meeting_not_found' });
   if (!current.isClosed) return res.status(409).json({ error: 'ppc_meeting_not_closed' });
@@ -2826,7 +3011,14 @@ router.post('/weeks/:weekId/ppc-meeting/reopen', authenticate, loadUser, require
       closedAt: null,
       closedById: null,
     },
-    include: { attendances: true, closedBy: { select: { name: true } } },
+    include: {
+      attendances: {
+        include: {
+          contractor: { include: { function: true } },
+        },
+      },
+      closedBy: { select: { name: true } },
+    },
   });
 
   await writeAudit({
@@ -2838,7 +3030,8 @@ router.post('/weeks/:weekId/ppc-meeting/reopen', authenticate, loadUser, require
     description: `Reunião de PPC da semana ${req.week.weekNumber} reaberta.`,
   });
 
-  const contractors = await listActiveContractorsByWeek(req.week.id, req.workId);
+  const suggestedContractors = await listActiveContractorsByWeek(req.week.id, req.workId);
+  const contractors = buildPpcMeetingContractorList(suggestedContractors, updated.attendances || []);
   return res.json(serializePpcMeeting(updated, req.week, contractors));
 }));
 

@@ -19,6 +19,7 @@
         <p>Planejamento de curto prazo</p>
       </div>
     </div>
+    <div id="topWorkflowStrip" class="top-workflow-strip hidden"></div>
     <div class="session-box">
       <div id="sessionInfo">Sem sessão</div>
       <button id="logoutBtn" type="button" class="secondary compact hidden">Sair</button>
@@ -1341,6 +1342,13 @@
             <button id="ppcMeetingPreSendAllEmailBtn" type="button" class="secondary">Enviar e-mail (atividades + convocação)</button>
           </div>
           <div id="ppcMeetingWeatherStrip" class="weather-inline-strip weather-inline-strip--meeting"></div>
+          <div class="actions-row meeting-contractor-manager">
+            <label class="meeting-contractor-picker">
+              <span>Adicionar empreiteiro à reunião</span>
+              <select id="ppcMeetingAddContractorSelect"></select>
+            </label>
+            <button id="ppcMeetingAddContractorBtn" type="button" class="secondary">Adicionar empreiteiro</button>
+          </div>
           <div class="table-wrap">
             <table>
               <thead>
@@ -1798,8 +1806,6 @@
           <form id="feedbackForm" class="feedback-form feedback-form-inline">
             <input id="closeFeedbackCycle" type="checkbox" class="hidden" />
           </form>
-          <button id="closeFeedbackWeekBtn" type="button" class="danger feedback-close-btn">Fechar feedback da semana</button>
-          <button id="reopenFeedbackWeekBtn" type="button" class="secondary feedback-close-btn hidden">Reabrir feedback da semana</button>
           <div id="feedbackCloseConfirmModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="feedbackCloseConfirmTitle">
             <article class="planning-modal-card feedback-close-modal-card">
               <h3 id="feedbackCloseConfirmTitle">Fechar feedback da semana</h3>
@@ -1911,6 +1917,22 @@
             <button type="submit" id="feedbackAddUnplannedBtn">Adicionar atividade executada não planejada</button>
           </form>
         </article>
+        <article class="panel feedback-bottom-actions">
+          <div class="actions-row actions-row--footer">
+            <button id="closeFeedbackWeekBtn" type="button" class="danger feedback-close-btn">Fechar feedback da semana</button>
+            <button id="reopenFeedbackWeekBtn" type="button" class="secondary feedback-close-btn hidden">Reabrir feedback da semana</button>
+          </div>
+        </article>
+        <div id="feedbackSaveProgressModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="feedbackSaveProgressTitle">
+          <article class="planning-modal-card save-progress-modal-card">
+            <h3 id="feedbackSaveProgressTitle">Salvando feedback da semana</h3>
+            <p id="feedbackSaveProgressMessage">Preparando salvamento...</p>
+            <div class="progress-track" aria-hidden="true">
+              <div id="feedbackSaveProgressBar" class="progress-fill"></div>
+            </div>
+            <p id="feedbackSaveProgressPercent" class="progress-caption">0%</p>
+          </article>
+        </div>
       </section>
 
       <section class="tab-panel" data-tab-panel="gestao">
@@ -1955,8 +1977,18 @@
 
           <article class="panel">
             <h3>Desempenho por empreiteiro</h3>
-            <div id="dashboardContractorMetaLabel" class="chart-bar-label"></div>
-            <div id="dashboardContractorBars" class="chart-bars"></div>
+            <div class="dashboard-contractor-split">
+              <div class="dashboard-contractor-panel">
+                <h4>PPC bruto por empreiteiro</h4>
+                <div id="dashboardContractorRawMetaLabel" class="chart-bar-label"></div>
+                <div id="dashboardContractorRawBars" class="chart-bars"></div>
+              </div>
+              <div class="dashboard-contractor-panel">
+                <h4>Performance sem causas específicas</h4>
+                <div id="dashboardContractorMetaLabel" class="chart-bar-label"></div>
+                <div id="dashboardContractorBars" class="chart-bars"></div>
+              </div>
+            </div>
           </article>
 
           <article class="panel">
@@ -2209,8 +2241,6 @@
           </div>
           <div id="qualityDeadlineCountdown" class="deadline-countdown-box hidden"></div>
           <div id="qualityCompletionBox" class="summary-kpi-grid"></div>
-          <button id="closeQualityWeekBtn" type="button" class="danger feedback-close-btn">Fechar qualidade percebida da semana</button>
-          <button id="reopenQualityWeekBtn" type="button" class="secondary feedback-close-btn hidden">Reabrir qualidade percebida da semana</button>
         </article>
         <article class="panel">
           <h3>Faixas de avaliação da obra</h3>
@@ -2243,6 +2273,12 @@
                 <button type="button" id="closeQualityValidationBtn" class="secondary">OK</button>
               </div>
             </article>
+          </div>
+        </article>
+        <article class="panel feedback-bottom-actions">
+          <div class="actions-row actions-row--footer">
+            <button id="closeQualityWeekBtn" type="button" class="danger feedback-close-btn">Fechar qualidade percebida da semana</button>
+            <button id="reopenQualityWeekBtn" type="button" class="secondary feedback-close-btn hidden">Reabrir qualidade percebida da semana</button>
           </div>
         </article>
       </section>

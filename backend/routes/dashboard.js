@@ -89,6 +89,14 @@ function parseCauseDescription(description) {
   };
 }
 
+function computeCollaborationFinalScore(teamScore, presenceWeight, isPresentAtMeeting) {
+  if (!Number.isInteger(teamScore)) return null;
+  const normalizedPresenceWeight = Math.max(0, Math.min(10, Number(presenceWeight || 0)));
+  const evaluationWeight = 10 - normalizedPresenceWeight;
+  const presenceFactor = isPresentAtMeeting ? 1 : 0;
+  return Number(((presenceFactor * normalizedPresenceWeight) + ((Number(teamScore) / 10) * evaluationWeight)).toFixed(2));
+}
+
 function formatDateBr(value) {
   if (!value) return '';
   const date = new Date(value);
@@ -1458,9 +1466,8 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
       }
     });
 
-    const considered = row.executed + row.started + row.notStarted + row.cancelled;
-    row.ppc = considered ? Number(((row.executed / considered) * 100).toFixed(2)) : 0;
     row.executedPlannedPct = row.planned ? Number(((row.executed / row.planned) * 100).toFixed(2)) : 0;
+    row.ppc = row.executedPlannedPct;
     row.nonExecuted = row.started + row.notStarted;
     row.planningQualityPct = row.planned
       ? Number((Math.max(0, 1 - ((row.cancelled + row.unplannedExecuted) / row.planned)) * 100).toFixed(2))
@@ -2082,7 +2089,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
 
   historyWeeks.forEach((week) => {
     const workTimeZone = inferBrazilTimeZoneFromWork(week.work || work);
-    const prePlanningDeadline = computeWeekDeadlineLocalParts(
+    const prePlanningDeadline = computeWeekDeadlineDate(
       week,
       prePlanningDeadlineWeekday,
       prePlanningDeadlineTime,
@@ -2090,7 +2097,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
       '17:00',
       { scope: 'PREVIOUS_WEEK', timeZone: workTimeZone },
     );
-    const ppcMeetingDeadline = computeWeekDeadlineLocalParts(
+    const ppcMeetingDeadline = computeWeekDeadlineDate(
       week,
       ppcMeetingDeadlineWeekday,
       ppcMeetingDeadlineTime,
@@ -2098,7 +2105,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
       '17:00',
       { scope: 'PREVIOUS_WEEK', timeZone: workTimeZone },
     );
-    const planningDeadline = computeWeekDeadlineLocalParts(
+    const planningDeadline = computeWeekDeadlineDate(
       week,
       planningDeadlineWeekday,
       planningDeadlineTime,
@@ -2106,7 +2113,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
       '15:00',
       { scope: 'PREVIOUS_WEEK', timeZone: workTimeZone },
     );
-    const feedbackDeadline = computeWeekDeadlineLocalParts(
+    const feedbackDeadline = computeWeekDeadlineDate(
       week,
       feedbackDeadlineWeekday,
       feedbackDeadlineTime,
@@ -2114,7 +2121,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
       '17:00',
       { scope: 'CURRENT_WEEK', timeZone: workTimeZone },
     );
-    const qualityDeadline = computeWeekDeadlineLocalParts(
+    const qualityDeadline = computeWeekDeadlineDate(
       week,
       qualityDeadlineWeekday,
       qualityDeadlineTime,
@@ -2149,7 +2156,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
 
     if (prePlanningClosedAt) {
       governance.prePlanningClosedWeeks += 1;
-      if (prePlanningDeadline && compareLocalDateTimeParts(getDatePartsInTimeZone(prePlanningClosedAt, workTimeZone), prePlanningDeadline) <= 0) {
+      if (prePlanningDeadline && new Date(prePlanningClosedAt).getTime() <= prePlanningDeadline.getTime()) {
         governance.prePlanningOnTimeWeeks += 1;
       } else {
         governance.prePlanningLateWeeks += 1;
@@ -2158,7 +2165,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
 
     if (ppcMeetingClosedAt) {
       governance.ppcMeetingClosedWeeks += 1;
-      if (ppcMeetingDeadline && compareLocalDateTimeParts(getDatePartsInTimeZone(ppcMeetingClosedAt, workTimeZone), ppcMeetingDeadline) <= 0) {
+      if (ppcMeetingDeadline && new Date(ppcMeetingClosedAt).getTime() <= ppcMeetingDeadline.getTime()) {
         governance.ppcMeetingOnTimeWeeks += 1;
       } else {
         governance.ppcMeetingLateWeeks += 1;
@@ -2167,7 +2174,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
 
     if (planningClosedAt) {
       governance.planningClosedWeeks += 1;
-      if (planningDeadline && compareLocalDateTimeParts(getDatePartsInTimeZone(planningClosedAt, workTimeZone), planningDeadline) <= 0) {
+      if (planningDeadline && new Date(planningClosedAt).getTime() <= planningDeadline.getTime()) {
         governance.planningOnTimeWeeks += 1;
         monthlyGov.planningOnTime += 1;
       } else {
@@ -2178,7 +2185,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
 
     if (feedbackClosedAt) {
       governance.feedbackClosedWeeks += 1;
-      if (feedbackDeadline && compareLocalDateTimeParts(getDatePartsInTimeZone(feedbackClosedAt, workTimeZone), feedbackDeadline) <= 0) {
+      if (feedbackDeadline && new Date(feedbackClosedAt).getTime() <= feedbackDeadline.getTime()) {
         governance.feedbackOnTimeWeeks += 1;
         monthlyGov.feedbackOnTime += 1;
       } else {
@@ -2189,7 +2196,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
 
     if (qualityClosedAt) {
       governance.qualityClosedWeeks += 1;
-      if (qualityDeadline && compareLocalDateTimeParts(getDatePartsInTimeZone(qualityClosedAt, workTimeZone), qualityDeadline) <= 0) {
+      if (qualityDeadline && new Date(qualityClosedAt).getTime() <= qualityDeadline.getTime()) {
         governance.qualityOnTimeWeeks += 1;
       } else {
         governance.qualityLateWeeks += 1;
@@ -2811,11 +2818,12 @@ router.get('/works/:workId/dashboard/weeks/:weekId', authenticate, loadUser, req
         ? Math.max(0, Number((100 - Number(nonComplianceRow.pct || 0)).toFixed(2)))
         : 0;
       const present = attendanceByContractorId.get(Number(contractor.id)) === true;
-      const presenceScore = present ? Number(qualityThresholds.presenceImpact || 0) : 0;
       const collabTeam = Number.isInteger(item?.collaborationTeamScore) ? Number(item.collaborationTeamScore) : null;
-      const collaborationScore = collabTeam === null
-        ? null
-        : Number(((collabTeam + presenceScore) / 2).toFixed(2));
+      const collaborationScore = computeCollaborationFinalScore(
+        collabTeam,
+        qualityThresholds.presenceImpact,
+        present,
+      );
       const qualityScore = Number.isInteger(item?.qualityScore) ? Number(item.qualityScore) : null;
       const safetyScore = Number.isInteger(item?.safetyScore) ? Number(item.safetyScore) : null;
       const cleaningScore = Number.isInteger(item?.cleaningScore) ? Number(item.cleaningScore) : null;
@@ -5860,11 +5868,12 @@ router.get('/works/:workId/dashboard/reports/last-week/pdf', authenticate, loadU
         ? Math.max(0, Number((100 - Number(nonComplianceRow.pct || 0)).toFixed(2)))
         : 0;
       const present = attendanceByContractorId.get(Number(contractor.id)) === true;
-      const presenceScore = present ? Number(qualityThresholds.presenceImpact || 0) : 0;
       const collabTeam = Number.isInteger(item?.collaborationTeamScore) ? Number(item.collaborationTeamScore) : null;
-      const collaborationScore = collabTeam === null
-        ? null
-        : Number(((collabTeam + presenceScore) / 2).toFixed(2));
+      const collaborationScore = computeCollaborationFinalScore(
+        collabTeam,
+        qualityThresholds.presenceImpact,
+        present,
+      );
       return {
         contractorId: Number(contractor.id),
         contractorName: contractor.name,
@@ -7262,23 +7271,13 @@ router.get('/works/:workId/dashboard/reports/last-week/pdf', authenticate, loadU
   drawSectionTitle('5 - GOVERNANÇA');
   drawSectionTitle('5.1 - CUMPRIMENTO DOS PRAZOS', rowH * 2);
 
-  const formatDelayInfo = (deadlineParts, closedAt, timeZone) => {
+  const formatDelayInfo = (deadlineDate, closedAt) => {
     if (!closedAt) return { status: 'PENDING', text: 'Não fechado', sort: Number.POSITIVE_INFINITY };
-    if (!deadlineParts) return { status: 'UNKNOWN', text: 'Sem prazo definido', sort: 0 };
-    const closedParts = getDatePartsInTimeZone(closedAt, timeZone);
-    const cmp = compareLocalDateTimeParts(closedParts, deadlineParts);
-    if (!Number.isFinite(cmp)) return { status: 'UNKNOWN', text: 'Sem prazo definido', sort: 0 };
-    if (cmp <= 0) return { status: 'ONTIME', text: 'No prazo', sort: cmp };
+    if (!deadlineDate) return { status: 'UNKNOWN', text: 'Sem prazo definido', sort: 0 };
     const closedDate = new Date(closedAt);
-    const deadlineDate = new Date(Date.UTC(
-      deadlineParts.year,
-      deadlineParts.month - 1,
-      deadlineParts.day,
-      deadlineParts.hour,
-      deadlineParts.minute,
-      deadlineParts.second || 0,
-      0,
-    ));
+    if (Number.isNaN(closedDate.getTime())) return { status: 'UNKNOWN', text: 'Sem prazo definido', sort: 0 };
+    const cmp = closedDate.getTime() - deadlineDate.getTime();
+    if (cmp <= 0) return { status: 'ONTIME', text: 'No prazo', sort: cmp };
     const deltaMs = Math.max(0, closedDate.getTime() - deadlineDate.getTime());
     const totalMinutes = Math.floor(deltaMs / 60000);
     const days = Math.floor(totalMinutes / (24 * 60));
@@ -7295,7 +7294,7 @@ router.get('/works/:workId/dashboard/reports/last-week/pdf', authenticate, loadU
   const governanceRows = [
     {
       event: 'Fechamento Pré-programação da semana',
-      deadline: computeWeekDeadlineLocalParts(
+      deadline: computeWeekDeadlineDate(
         week,
         notificationRule?.prePlanningDeadlineWeekday,
         notificationRule?.prePlanningDeadlineTime,
@@ -7308,7 +7307,7 @@ router.get('/works/:workId/dashboard/reports/last-week/pdf', authenticate, loadU
     },
     {
       event: 'Fechamento Lista de Presença + Ata de Reunião',
-      deadline: computeWeekDeadlineLocalParts(
+      deadline: computeWeekDeadlineDate(
         week,
         notificationRule?.ppcMeetingDeadlineWeekday,
         notificationRule?.ppcMeetingDeadlineTime,
@@ -7321,7 +7320,7 @@ router.get('/works/:workId/dashboard/reports/last-week/pdf', authenticate, loadU
     },
     {
       event: 'Fechamento Programação da semana',
-      deadline: computeWeekDeadlineLocalParts(
+      deadline: computeWeekDeadlineDate(
         week,
         notificationRule?.planningDeadlineWeekday,
         notificationRule?.planningDeadlineTime,
@@ -7334,7 +7333,7 @@ router.get('/works/:workId/dashboard/reports/last-week/pdf', authenticate, loadU
     },
     {
       event: 'Fechamento Feedback da semana',
-      deadline: computeWeekDeadlineLocalParts(
+      deadline: computeWeekDeadlineDate(
         week,
         notificationRule?.feedbackDeadlineWeekday,
         notificationRule?.feedbackDeadlineTime,
@@ -7347,7 +7346,7 @@ router.get('/works/:workId/dashboard/reports/last-week/pdf', authenticate, loadU
     },
     {
       event: 'Fechamento Qualidade percebida da semana',
-      deadline: computeWeekDeadlineLocalParts(
+      deadline: computeWeekDeadlineDate(
         week,
         notificationRule?.qualityDeadlineWeekday,
         notificationRule?.qualityDeadlineTime,
@@ -7359,11 +7358,11 @@ router.get('/works/:workId/dashboard/reports/last-week/pdf', authenticate, loadU
       closedBy: String(week.qualityClosedBy?.name || '-'),
     },
   ].map((row) => {
-    const delay = formatDelayInfo(row.deadline, row.closedAt, tz);
+    const delay = formatDelayInfo(row.deadline, row.closedAt);
     return {
       ...row,
       delay,
-      deadlineText: formatDeadlineLocalPartsBr(row.deadline),
+      deadlineText: row.deadline ? formatDateTimeBrInTimeZone(row.deadline, tz) : '-',
       closedAtText: row.closedAt ? formatDateTimeBrInTimeZone(row.closedAt, tz) : '-',
     };
   });
