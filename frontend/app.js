@@ -591,6 +591,32 @@ function closeFeedbackSaveProgressModal() {
   updateFeedbackSaveProgress(0, 'Preparando salvamento...');
 }
 
+function updateGenericSaveProgress(progress = 0, message = 'Salvando...', title = 'Salvando') {
+  const bar = $('#genericSaveProgressBar');
+  const percentEl = $('#genericSaveProgressPercent');
+  const messageEl = $('#genericSaveProgressMessage');
+  const titleEl = $('#genericSaveProgressTitle');
+  const safeProgress = Math.max(0, Math.min(100, Number(progress) || 0));
+  if (titleEl) titleEl.textContent = title;
+  if (bar) bar.style.width = `${safeProgress}%`;
+  if (percentEl) percentEl.textContent = `${Math.round(safeProgress)}%`;
+  if (messageEl) messageEl.textContent = message;
+}
+
+function openGenericSaveProgressModal(progress = 0, message = 'Preparando salvamento...', title = 'Salvando') {
+  const modal = $('#genericSaveProgressModal');
+  if (!modal) return;
+  updateGenericSaveProgress(progress, message, title);
+  modal.classList.remove('hidden');
+}
+
+function closeGenericSaveProgressModal() {
+  const modal = $('#genericSaveProgressModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  updateGenericSaveProgress(0, 'Preparando salvamento...', 'Salvando');
+}
+
 function toggleTemporaryDisabled(elements, disabled, stateKey) {
   elements.forEach((el) => {
     if (!el) return;
@@ -667,6 +693,34 @@ function setQualitySavingLock(locked) {
   ];
   toggleTemporaryDisabled(elements, locked, 'savedisabledQuality');
   const panel = $('#qualityBody')?.closest('.panel');
+  if (panel) panel.classList.toggle('panel-saving', locked);
+  if (panel && locked) panel.setAttribute('aria-busy', 'true');
+  if (panel && !locked) panel.removeAttribute('aria-busy');
+}
+
+function setMeetingSavingLock(locked) {
+  const elements = [
+    $('#ppcMeetingDate'),
+    $('#ppcMeetingDatePicker'),
+    $('#ppcMeetingTime'),
+    $('#ppcMeetingSavePreBtn'),
+    $('#ppcMeetingPreExportAllPdfBtn'),
+    $('#ppcMeetingPreExportMinutesPdfBtn'),
+    $('#ppcMeetingPreSendAllEmailBtn'),
+    $('#ppcMeetingAddContractorSelect'),
+    $('#ppcMeetingAddContractorBtn'),
+    $('#ppcMeetingSavePostBtn'),
+    $('#ppcMeetingCloseBtn'),
+    $('#ppcMeetingReopenBtn'),
+    $('#ppcMeetingExportMinutesPdfBtn'),
+    $('#ppcMeetingSendMinutesEmailBtn'),
+    $('#ppcMeetingWeekRefreshBtn'),
+    $('#ppcMeetingMinutes'),
+    ...$$('#ppcMeetingAttendanceBody input, #ppcMeetingAttendanceBody select, #ppcMeetingAttendanceBody button'),
+    ...$$('#ppcMeetingPreContractorsBody button'),
+  ];
+  toggleTemporaryDisabled(elements, locked, 'savedisabledMeeting');
+  const panel = $('#ppcMeetingAttendanceBody')?.closest('.panel');
   if (panel) panel.classList.toggle('panel-saving', locked);
   if (panel && locked) panel.setAttribute('aria-busy', 'true');
   if (panel && !locked) panel.removeAttribute('aria-busy');
@@ -2469,6 +2523,31 @@ function planningStatusLabelFromCode(code) {
   return 'Planejada';
 }
 
+function auditEventLabel(eventType) {
+  const key = String(eventType || '').trim().toUpperCase();
+  const labels = {
+    USER_LOGIN: 'Login',
+    PRE_PLANNING_CLOSED: 'Pré-programação fechada',
+    PRE_PLANNING_REOPENED: 'Pré-programação reaberta',
+    PPC_MEETING_CLOSED: 'Reunião fechada',
+    PPC_MEETING_REOPENED: 'Reunião reaberta',
+    PLANNING_CLOSED: 'Programação fechada',
+    FEEDBACK_REOPENED: 'Feedback reaberto',
+    PERCEIVED_QUALITY_SAVED: 'Qualidade salva',
+    PERCEIVED_QUALITY_CLOSED: 'Qualidade fechada',
+    PERCEIVED_QUALITY_REOPENED: 'Qualidade reaberta',
+    TASK_CREATED: 'Atividade criada',
+    PRE_TASK_CREATED: 'Atividade criada na pré-programação',
+    TASK_CANCELLED: 'Atividade cancelada',
+    PRE_TASK_CANCELLED: 'Atividade cancelada na pré-programação',
+    USER_CREATED: 'Usuário criado',
+    WORK_CREATED: 'Obra criada',
+    WORK_UPDATED: 'Obra atualizada',
+    HOLIDAY_CALENDAR_PDF_EXPORTED: 'Calendário exportado',
+  };
+  return labels[key] || key.replace(/_/g, ' ');
+}
+
 function sheetStatusOptionsHtml(selectedStatus, mode = 'default') {
   const current = String(selectedStatus || 'PLANNED').toUpperCase();
   const options = mode === 'reserve-pending'
@@ -3042,7 +3121,9 @@ function closeSideNavMobile() {
 
 function renderSideNavActiveState() {
   const currentMain = activeTabName();
-  const dashboardSubtab = state.dashboardTab === 'historico' ? 'historico' : 'relatorio';
+  const dashboardSubtab = ['relatorio', 'historico', 'governanca'].includes(state.dashboardTab)
+    ? state.dashboardTab
+    : 'relatorio';
   const obraSubtab = state.obraCadastroTab || 'zoneamento';
   const cadastroSubview = state.cadastroView || 'users';
   const userTab = state.cadastroUsersTab || 'users';
@@ -4850,6 +4931,47 @@ async function addSheetDraftRows(count) {
   setStatus(`${qty} linha(s) em branco adicionada(s) na planilha.`);
 }
 
+function shiftSheetSequenceNumbersAfter(sequenceNumber) {
+  const base = Number(sequenceNumber) || 0;
+  state.tasks.forEach((item) => {
+    const current = Number(item.sequenceNumber) || 0;
+    if (current > base) item.sequenceNumber = current + 1;
+  });
+  state.sheetDraftRows.forEach((item) => {
+    const current = Number(item.sequenceNumber) || 0;
+    if (current > base) item.sequenceNumber = current + 1;
+  });
+}
+
+function createDraftFromSheetRow(row) {
+  const payload = getSheetRowPayload(row);
+  const sourceSequence = Number.parseInt(
+    row.querySelector('.sheet-seq')?.dataset.sequenceValue || row.querySelector('.sheet-seq')?.textContent || '',
+    10,
+  ) || nextSheetSequenceNumber();
+  shiftSheetSequenceNumbersAfter(sourceSequence);
+  const contractorId = Number(payload.contractorId) || null;
+  const contractor = (state.contractors || []).find((item) => Number(item.id) === contractorId) || null;
+  state.sheetDraftRows.push({
+    draftId: `${Date.now()}-dup-${Math.random().toString(36).slice(2, 8)}`,
+    sequenceNumber: sourceSequence + 1,
+    originWeekNumber: Number.parseInt((row.querySelector('.sheet-origin-week')?.textContent || '').trim(), 10) || (activeWeek()?.weekNumber || numericWeekField() || ''),
+    contractorId,
+    contractorLaborType: contractor?.function?.name || contractor?.laborType || '',
+    supervisor: payload.supervisor || contractor?.supervisor || '',
+    locationLevel1: payload.locationLevel1 || '',
+    locationLevel2: payload.locationLevel2 || '',
+    description: payload.description || '',
+    plannedStart: payload.plannedStart || '',
+    plannedEnd: payload.plannedEnd || '',
+    status: String(payload.status || 'PLANNED').toUpperCase(),
+    plannedDays: Array.isArray(payload.plannedDays) ? payload.plannedDays.map((item) => ({ ...item })) : [],
+  });
+  markScreenDirty('planning');
+  renderTasks();
+  setStatus('Linha duplicada na planilha.');
+}
+
 function contractorOptionsHtml(selectedId, laborType = '') {
   const selected = selectedId == null ? '' : String(selectedId);
   const filtered = contractorsForLaborType(laborType);
@@ -4971,6 +5093,7 @@ function renderSheetTaskRow(task, canEdit, _canCancel, isDraft = false) {
 
   const actions = [];
   if (editable) {
+    actions.push('<button type="button" class="secondary" data-sheet-duplicate="1">Duplicar</button>');
     if (isDraft) {
       actions.push(`<button type="button" class="secondary" data-sheet-delete-draft="${escapeHtml(task.draftId)}">Excluir</button>`);
     } else {
@@ -6196,12 +6319,20 @@ function renderTasks() {
       const el = $(`#${id}`);
       if (el) el.disabled = !canEdit;
     });
-  body.insertAdjacentHTML('beforeend', state.sheetDraftRows.map((draft) => (
-    renderSheetTaskRow(draft, canEdit, false, true)
-  )).join(''));
+  const sheetRows = [
+    ...state.sheetDraftRows.map((draft) => ({
+      sequenceNumber: Number(draft.sequenceNumber) || 0,
+      html: renderSheetTaskRow(draft, canEdit, false, true),
+    })),
+    ...state.tasks.map((task) => ({
+      sequenceNumber: Number(task.sequenceNumber) || 0,
+      html: renderSheetTaskRow(task, canEdit, false, false),
+    })),
+  ].sort((a, b) => a.sequenceNumber - b.sequenceNumber);
+
+  body.insertAdjacentHTML('beforeend', sheetRows.map((item) => item.html).join(''));
 
   state.tasks.forEach((task) => {
-    body.insertAdjacentHTML('beforeend', renderSheetTaskRow(task, canEdit, false, false));
 
     const taskFeedback = (task.feedbacks || [])[0] || null;
     const feedbackStatus = String(taskFeedback?.status || feedbackDefaultStatusFromTask(task)).toUpperCase();
@@ -6606,6 +6737,7 @@ async function handleQualitySave(options = {}) {
   try {
     state.qualitySaveInProgress = true;
     setQualitySavingLock(true);
+    if (!options.autosave) openGenericSaveProgressModal(12, 'Validando notas e comentários...', 'Salvando qualidade percebida');
     const week = qualityWeekSelected();
     if (!week?.id) {
       setStatus('Selecione uma semana válida na aba Qualidade Percebida.', true);
@@ -6627,12 +6759,14 @@ async function handleQualitySave(options = {}) {
       return false;
     }
 
+    if (!options.autosave) updateGenericSaveProgress(54, 'Salvando qualidade percebida...', 'Salvando qualidade percebida');
     const saved = await api(`/weeks/${week.id}/perceived-quality`, {
       method: 'PUT',
       body: { items: payload },
     });
     state.qualityData = saved || null;
     renderQualityTable(state.qualityData);
+    if (!options.autosave) updateGenericSaveProgress(100, 'Salvamento concluído.', 'Salvando qualidade percebida');
     clearScreenDirty('quality');
     if (options.autosave) {
       showToast('Rascunho da qualidade percebida salvo automaticamente.', { kind: 'success', durationMs: 3200 });
@@ -6651,6 +6785,9 @@ async function handleQualitySave(options = {}) {
   } finally {
     state.qualitySaveInProgress = false;
     setQualitySavingLock(false);
+    if (!options.autosave) {
+      window.setTimeout(() => closeGenericSaveProgressModal(), 250);
+    }
   }
 }
 
@@ -7248,6 +7385,27 @@ function renderDashboardHistory(data) {
   }
 }
 
+function renderDashboardGovernance(rows) {
+  const body = $('#dashboardGovernanceAuditBody');
+  if (!body) return;
+  body.innerHTML = '';
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="4">Sem registros recentes para esta obra.</td></tr>';
+    return;
+  }
+  list.forEach((row) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(formatDateTimeBr(row.createdAt))}</td>
+      <td>${escapeHtml(row.user?.name || row.user?.email || 'Sistema')}</td>
+      <td>${escapeHtml(auditEventLabel(row.eventType))}</td>
+      <td>${escapeHtml(row.description || '-')}</td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
 async function refreshDashboardHistoryTab(options = {}) {
   const useDefault = options.useDefault !== false;
   const silent = options.silent === true;
@@ -7308,11 +7466,35 @@ async function refreshDashboardHistoryTab(options = {}) {
   }
 }
 
+async function refreshDashboardGovernanceTab(options = {}) {
+  const silent = options.silent === true;
+  if (!state.selectedWorkId) {
+    renderDashboardGovernance(null);
+    return;
+  }
+  if (!hasAnyRole(ADMIN_ONLY_ROLES)) {
+    renderDashboardGovernance([]);
+    if (!silent) setStatus('A aba de governança é exclusiva do administrador.', true);
+    return;
+  }
+  const rows = await api(`/works/${state.selectedWorkId}/audit?limit=50`);
+  renderDashboardGovernance(rows);
+  if (!silent) {
+    setStatus('Governança atualizada com os últimos 50 registros da obra.');
+  }
+}
+
 async function refreshDashboardBySubtab(options = {}) {
-  const currentSubtab = state.dashboardTab === 'historico' ? 'historico' : 'relatorio';
+  const currentSubtab = ['relatorio', 'historico', 'governanca'].includes(state.dashboardTab)
+    ? state.dashboardTab
+    : 'relatorio';
   if (state.dashboardTab !== currentSubtab) state.dashboardTab = currentSubtab;
   if (currentSubtab === 'historico') {
     await refreshDashboardHistoryTab(options);
+    return;
+  }
+  if (currentSubtab === 'governanca') {
+    await refreshDashboardGovernanceTab(options);
     return;
   }
   await refreshDashboardTab(options);
@@ -7490,6 +7672,9 @@ function applyUiPermissions() {
   $('#dashboardWeekRefreshBtn').disabled = !canDashboard;
   $('#dashboardLastWeekReportPdfBtn').disabled = !canDashboard;
   if ($('#dashboardHistoryPdfBtn')) $('#dashboardHistoryPdfBtn').disabled = !canDashboard;
+  if ($('#dashboardGovernanceTabBtn')) $('#dashboardGovernanceTabBtn').classList.toggle('hidden', !isAdminContext);
+  if ($('#sideGovernanceBtn')) $('#sideGovernanceBtn').classList.toggle('hidden', !isAdminContext);
+  if (!isAdminContext && state.dashboardTab === 'governanca') state.dashboardTab = 'relatorio';
 
   const dashboardTab = document.querySelector('[data-tab="gestao"]');
   dashboardTab.classList.toggle('hidden', !canDashboard);
@@ -7956,6 +8141,7 @@ async function refreshContext() {
     renderPpcMeetingTab();
     renderDashboard(null);
     renderDashboardHistory(null);
+    renderDashboardGovernance(null);
     renderDeadlineCountdowns();
     return;
   }
@@ -10204,7 +10390,11 @@ function ppcMeetingAttendancePayloadFromScreen() {
 }
 
 async function handlePpcMeetingSavePre() {
+  if (state.weekSheetSaveInProgress) return;
   try {
+    state.weekSheetSaveInProgress = true;
+    setMeetingSavingLock(true);
+    openGenericSaveProgressModal(12, 'Validando data e hora da reunião...', 'Salvando reunião de PPC');
     const week = ppcMeetingWeekSelected();
     if (!week?.id) return setStatus('Selecione uma semana válida na aba Reunião de PPC.', true);
     if (String(week.prePlanningStatus || '').toUpperCase() !== 'CLOSED') {
@@ -10219,11 +10409,18 @@ async function handlePpcMeetingSavePre() {
     const parsed = parseBrDateTimeToIso(meetingDateRaw, meetingTimeRaw);
     if (parsed.error) return setStatus(translateApiError(parsed.error, 'Dados de reunião inválidos'), true);
     const payload = { meetingAt: parsed.iso };
+    updateGenericSaveProgress(55, 'Salvando data e hora da reunião...', 'Salvando reunião de PPC');
     await api(`/weeks/${week.id}/ppc-meeting/pre`, { method: 'PUT', body: payload });
+    updateGenericSaveProgress(84, 'Recarregando reunião da semana...', 'Salvando reunião de PPC');
     await refreshPpcMeetingTab({ useDefaultNext: false, silent: true });
+    updateGenericSaveProgress(100, 'Salvamento concluído.', 'Salvando reunião de PPC');
     setStatus(`Data/hora da reunião de PPC salva para a Semana ${week.weekNumber}.`);
   } catch (error) {
     setStatus(translateApiError(error.message, 'Erro ao salvar dados da pré-reunião'), true);
+  } finally {
+    state.weekSheetSaveInProgress = false;
+    setMeetingSavingLock(false);
+    window.setTimeout(() => closeGenericSaveProgressModal(), 250);
   }
 }
 
@@ -10254,7 +10451,11 @@ async function handlePpcMeetingPreMinutesPdfExport() {
 }
 
 async function handlePpcMeetingSavePost() {
+  if (state.weekSheetSaveInProgress) return;
   try {
+    state.weekSheetSaveInProgress = true;
+    setMeetingSavingLock(true);
+    openGenericSaveProgressModal(12, 'Validando presença e ata...', 'Salvando reunião de PPC');
     const week = ppcMeetingWeekSelected();
     if (!week?.id) return setStatus('Selecione uma semana válida na aba Reunião de PPC.', true);
     if (String(week.prePlanningStatus || '').toUpperCase() !== 'CLOSED') {
@@ -10265,14 +10466,21 @@ async function handlePpcMeetingSavePost() {
     }
     const minutes = String($('#ppcMeetingMinutes')?.value || '').trim();
     const attendance = ppcMeetingAttendancePayloadFromScreen();
+    updateGenericSaveProgress(56, 'Salvando presença e ata...', 'Salvando reunião de PPC');
     await api(`/weeks/${week.id}/ppc-meeting/post`, {
       method: 'PUT',
       body: { minutes, attendance },
     });
+    updateGenericSaveProgress(86, 'Recarregando reunião da semana...', 'Salvando reunião de PPC');
     await refreshPpcMeetingTab({ useDefaultNext: false, silent: true });
+    updateGenericSaveProgress(100, 'Salvamento concluído.', 'Salvando reunião de PPC');
     setStatus(`Pós-reunião salva para a Semana ${week.weekNumber}.`);
   } catch (error) {
     setStatus(translateApiError(error.message, 'Erro ao salvar presença e ata da reunião'), true);
+  } finally {
+    state.weekSheetSaveInProgress = false;
+    setMeetingSavingLock(false);
+    window.setTimeout(() => closeGenericSaveProgressModal(), 250);
   }
 }
 
@@ -11736,6 +11944,18 @@ async function handleImportGroupToWeek() {
 }
 
 async function handleTaskAction(event) {
+  const duplicateBtn = event.target.closest('button[data-sheet-duplicate]');
+  if (duplicateBtn) {
+    const row = sheetRowElementFromEventTarget(duplicateBtn);
+    if (!row) return;
+    try {
+      createDraftFromSheetRow(row);
+    } catch (error) {
+      setStatus(`Erro ao duplicar linha: ${error.message}`, true);
+    }
+    return;
+  }
+
   const cancelTaskBtn = event.target.closest('button[data-sheet-cancel-task]');
   if (cancelTaskBtn) {
     const taskId = Number(cancelTaskBtn.dataset.sheetCancelTask);

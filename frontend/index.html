@@ -165,6 +165,7 @@
             <p class="side-nav-description">Relatórios analíticos da semana e visão histórica acumulada da obra.</p>
             <button type="button" class="side-nav-item" data-side-main="gestao" data-side-dashboard="relatorio">Relatório da Semana</button>
             <button type="button" class="side-nav-item" data-side-main="gestao" data-side-dashboard="historico">Histórico</button>
+            <button type="button" class="side-nav-item hidden" id="sideGovernanceBtn" data-side-main="gestao" data-side-dashboard="governanca">Governança</button>
           </section>
 
           <section class="side-nav-group" data-side-mode="obra">
@@ -1088,6 +1089,16 @@
               <p id="planningSaveProgressPercent" class="progress-caption">0%</p>
             </article>
           </div>
+          <div id="genericSaveProgressModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="genericSaveProgressTitle">
+            <article class="planning-modal-card">
+              <h3 id="genericSaveProgressTitle">Salvando</h3>
+              <p id="genericSaveProgressMessage">Preparando salvamento...</p>
+              <div class="progress-track" aria-hidden="true">
+                <div id="genericSaveProgressBar" class="progress-fill"></div>
+              </div>
+              <p id="genericSaveProgressPercent" class="progress-caption">0%</p>
+            </article>
+          </div>
           <div class="table-wrap">
             <div id="planningWeatherInline" class="plan-table-weather-inline">
               <div id="planningWeatherInlineStrip" class="weather-inline-strip"></div>
@@ -1940,6 +1951,7 @@
           <div class="actions-row dashboard-subtabs">
             <button type="button" class="tab-btn dashboard-subtab-btn active" data-dashboard-tab="relatorio">Relatório da semana</button>
             <button type="button" class="tab-btn dashboard-subtab-btn" data-dashboard-tab="historico">Histórico</button>
+            <button type="button" class="tab-btn dashboard-subtab-btn hidden" id="dashboardGovernanceTabBtn" data-dashboard-tab="governanca">Governança</button>
           </div>
         </article>
 
@@ -2213,6 +2225,26 @@
                   </tr>
                 </thead>
                 <tbody id="historyReliabilityBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+
+        <div class="dashboard-subtab-panel hidden" data-dashboard-panel="governanca">
+          <article class="panel">
+            <h2>Governança</h2>
+            <p class="panel-intro-text">Últimos 50 logins e ações registradas para os usuários desta obra. Esta visão é exclusiva do administrador.</p>
+            <div class="table-wrap">
+              <table class="dashboard-table-centered">
+                <thead>
+                  <tr>
+                    <th>Data/Hora</th>
+                    <th>Usuário</th>
+                    <th>Evento</th>
+                    <th>Descrição</th>
+                  </tr>
+                </thead>
+                <tbody id="dashboardGovernanceAuditBody"></tbody>
               </table>
             </div>
           </article>

@@ -7529,7 +7529,7 @@ router.get('/works/:workId/dashboard/reports/last-week/pdf', authenticate, loadU
   doc.end();
 }));
 
-router.get('/works/:workId/audit', authenticate, loadUser, requireWorkRoles([ROLES.ADMIN, ROLES.CONTROLLER, ROLES.ENGINEERING], (req) => parseIntId(req.params.workId)), asyncHandler(async (req, res) => {
+router.get('/works/:workId/audit', authenticate, loadUser, requireWorkRoles([ROLES.ADMIN], (req) => parseIntId(req.params.workId)), asyncHandler(async (req, res) => {
   const limit = Math.min(parseIntId(req.query.limit) || 200, 1000);
   const entityType = req.query.entityType ? String(req.query.entityType) : undefined;
   const entityId = parseIntId(req.query.entityId);
