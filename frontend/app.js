@@ -1959,16 +1959,6 @@ function renderTopWorkflowStrip() {
     </div>
   `).join('');
 
-  host.querySelectorAll('[data-workflow-stage]').forEach((button) => {
-    button.addEventListener('click', async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      await navigateFromWorkflowStage(
-        Number(button.getAttribute('data-workflow-week') || 0),
-        String(button.getAttribute('data-workflow-stage') || ''),
-      );
-    });
-  });
 }
 
 function startOfDayLocalFromInput(value) {
@@ -3281,6 +3271,19 @@ function handleWorkHomeLinkClick(event) {
     return;
   }
   selectTab(main);
+}
+
+function handleTopWorkflowStageClick(event) {
+  const button = event.target.closest('[data-workflow-stage]');
+  if (!button) return;
+  event.preventDefault();
+  event.stopPropagation();
+  navigateFromWorkflowStage(
+    Number(button.getAttribute('data-workflow-week') || 0),
+    String(button.getAttribute('data-workflow-stage') || ''),
+  ).catch((error) => {
+    setStatus(`Erro ao abrir etapa da semana: ${error.message}`, true);
+  });
 }
 
 function applyAppMode() {
@@ -12095,6 +12098,7 @@ function bindEvents() {
   $('#loginForm').addEventListener('submit', handleLogin);
   $('#sideNav').addEventListener('click', handleSideNavItemClick);
   $('#appView').addEventListener('click', handleWorkHomeLinkClick);
+  $('#topWorkflowStrip')?.addEventListener('click', handleTopWorkflowStageClick);
   $('#sideNav').addEventListener('mouseenter', () => {
     if (!isMobileViewport()) document.body.classList.add('side-nav-expanded');
   });
