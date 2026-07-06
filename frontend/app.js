@@ -1837,41 +1837,67 @@ async function navigateFromWorkflowStage(weekNumber, stageKey) {
   const work = activeWork();
   if (!work) return;
   const weekText = String(weekNumber || '');
+  if (!weekText) return;
+
+  const applyWeekToInput = (selector) => {
+    const input = document.querySelector(selector);
+    if (input) {
+      input.value = weekText;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    return input;
+  };
+
+  const scrollToPrimaryCard = () => {
+    const target = document.querySelector('.planning-control-card, .feedback-card, .quality-card, .ppc-meeting-card, .dashboard-card, .work-welcome-card');
+    if (target && typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   state.workflowNavigationInProgress = true;
   try {
     if (stageKey === 'prePlanning') {
-      const input = $('#weekNumber');
-      if (input) input.value = weekText;
+      applyWeekToInput('#weekNumber');
       selectTab('preprogramacao');
+      applyWeekToInput('#weekNumber');
       await handleWeekRefresh();
+      scrollToPrimaryCard();
       return;
     }
     if (stageKey === 'ppcMeeting') {
-      const input = $('#ppcMeetingWeekNumber');
-      if (input) input.value = weekText;
+      applyWeekToInput('#ppcMeetingWeekNumber');
       selectTab('reuniaoppc');
+      applyWeekToInput('#ppcMeetingWeekNumber');
       await refreshPpcMeetingTab({ useDefaultNext: false, silent: true });
+      scrollToPrimaryCard();
       return;
     }
     if (stageKey === 'planning') {
-      const input = $('#weekNumber');
-      if (input) input.value = weekText;
+      applyWeekToInput('#weekNumber');
       selectTab('programacao');
+      applyWeekToInput('#weekNumber');
       await handleWeekRefresh();
+      scrollToPrimaryCard();
       return;
     }
     if (stageKey === 'feedback') {
-      const input = $('#feedbackWeekNumber');
-      if (input) input.value = weekText;
+      applyWeekToInput('#feedbackWeekNumber');
       selectTab('feedback');
+      applyWeekToInput('#feedbackWeekNumber');
       await refreshFeedbackTab({ useDefaultPrevious: false, silent: true });
+      scrollToPrimaryCard();
       return;
     }
     if (stageKey === 'quality') {
-      const input = $('#qualityWeekNumber');
-      if (input) input.value = weekText;
+      applyWeekToInput('#qualityWeekNumber');
       selectTab('qualidade');
+      applyWeekToInput('#qualityWeekNumber');
       await refreshQualityTab({ useDefaultCurrent: false, silent: true });
+      scrollToPrimaryCard();
     }
   } catch (error) {
     const labels = {
