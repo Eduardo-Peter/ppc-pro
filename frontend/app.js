@@ -62,6 +62,7 @@ const state = {
   cadastroUsersTab: 'users',
   obraCadastroTab: 'zoneamento',
   dashboardTab: 'relatorio',
+  workflowNavigationInProgress: false,
   currentRoles: new Set(),
   isAdmin: false,
   appConfig: null,
@@ -1832,43 +1833,57 @@ function topWorkflowTrackedWeeks() {
     .filter((item, index, arr) => arr.findIndex((row) => row.weekNumber === item.weekNumber) === index);
 }
 
-function navigateFromWorkflowStage(weekNumber, stageKey) {
+async function navigateFromWorkflowStage(weekNumber, stageKey) {
   const work = activeWork();
   if (!work) return;
   const weekText = String(weekNumber || '');
-  if (stageKey === 'prePlanning') {
-    selectTab('preprogramacao');
-    const input = $('#weekNumber');
-    if (input) input.value = weekText;
-    handleWeekRefresh().catch((error) => setStatus(`Erro ao abrir pré-programação: ${error.message}`, true));
-    return;
-  }
-  if (stageKey === 'ppcMeeting') {
-    selectTab('reuniaoppc');
-    const input = $('#ppcMeetingWeekNumber');
-    if (input) input.value = weekText;
-    refreshPpcMeetingTab({ useDefaultNext: false, silent: true }).catch((error) => setStatus(`Erro ao abrir reunião de PPC: ${error.message}`, true));
-    return;
-  }
-  if (stageKey === 'planning') {
-    selectTab('programacao');
-    const input = $('#weekNumber');
-    if (input) input.value = weekText;
-    handleWeekRefresh().catch((error) => setStatus(`Erro ao abrir programação: ${error.message}`, true));
-    return;
-  }
-  if (stageKey === 'feedback') {
-    selectTab('feedback');
-    const input = $('#feedbackWeekNumber');
-    if (input) input.value = weekText;
-    refreshFeedbackTab({ useDefaultPrevious: false, silent: true }).catch((error) => setStatus(`Erro ao abrir feedback: ${error.message}`, true));
-    return;
-  }
-  if (stageKey === 'quality') {
-    selectTab('qualidade');
-    const input = $('#qualityWeekNumber');
-    if (input) input.value = weekText;
-    refreshQualityTab({ useDefaultCurrent: false, silent: true }).catch((error) => setStatus(`Erro ao abrir qualidade percebida: ${error.message}`, true));
+  state.workflowNavigationInProgress = true;
+  try {
+    if (stageKey === 'prePlanning') {
+      const input = $('#weekNumber');
+      if (input) input.value = weekText;
+      selectTab('preprogramacao');
+      await handleWeekRefresh();
+      return;
+    }
+    if (stageKey === 'ppcMeeting') {
+      const input = $('#ppcMeetingWeekNumber');
+      if (input) input.value = weekText;
+      selectTab('reuniaoppc');
+      await refreshPpcMeetingTab({ useDefaultNext: false, silent: true });
+      return;
+    }
+    if (stageKey === 'planning') {
+      const input = $('#weekNumber');
+      if (input) input.value = weekText;
+      selectTab('programacao');
+      await handleWeekRefresh();
+      return;
+    }
+    if (stageKey === 'feedback') {
+      const input = $('#feedbackWeekNumber');
+      if (input) input.value = weekText;
+      selectTab('feedback');
+      await refreshFeedbackTab({ useDefaultPrevious: false, silent: true });
+      return;
+    }
+    if (stageKey === 'quality') {
+      const input = $('#qualityWeekNumber');
+      if (input) input.value = weekText;
+      selectTab('qualidade');
+      await refreshQualityTab({ useDefaultCurrent: false, silent: true });
+    }
+  } catch (error) {
+    const labels = {
+      prePlanning: 'pré-programação',
+      ppcMeeting: 'reunião de PPC',
+      planning: 'programação',
+      feedback: 'feedback',
+      quality: 'qualidade percebida',
+    };
+    setStatus(`Erro ao abrir ${labels[stageKey] || 'etapa'}: ${error.message}`, true);
+  } finally {
+    state.workflowNavigationInProgress = false;
   }
 }
 
@@ -1919,8 +1934,10 @@ function renderTopWorkflowStrip() {
   `).join('');
 
   host.querySelectorAll('[data-workflow-stage]').forEach((button) => {
-    button.addEventListener('click', () => {
-      navigateFromWorkflowStage(
+    button.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await navigateFromWorkflowStage(
         Number(button.getAttribute('data-workflow-week') || 0),
         String(button.getAttribute('data-workflow-stage') || ''),
       );
@@ -8173,6 +8190,10 @@ function selectTab(name) {
   syncPlanningModeUi();
   if (name === 'obrahome') {
     renderWorkWelcomePanel();
+  }
+  if (state.workflowNavigationInProgress) {
+    renderWeatherMiniThumb();
+    return;
   }
   if (name === 'atividades') {
     refreshExpectedActivitiesTab({ useDefaultNext: true, silent: true })
