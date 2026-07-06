@@ -1834,7 +1834,7 @@ function topWorkflowTrackedWeeks() {
 }
 
 async function navigateFromWorkflowStage(weekNumber, stageKey) {
-  const work = activeWork();
+  const work = selectedWork();
   if (!work) return;
   const weekText = String(weekNumber || '');
   if (!weekText) return;
