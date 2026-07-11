@@ -2931,20 +2931,12 @@ function syncPlanningModeUi() {
   const sheetTitle = $('#planningSheetTitle');
   const closeBtn = $('#closePlanningBtn');
   const reopenBtn = $('#reopenBtn');
-  const exportExcelBtn = $('#exportWeekExcelBtn');
-  const importExcelBtn = $('#importWeekExcelBtn');
 
   if (controlTitle) controlTitle.textContent = preMode ? 'Abertura e controle da pré-programação' : 'Abertura e controle da semana';
   if (weatherTitle) weatherTitle.textContent = preMode ? 'Previsão do tempo (domingo a sábado)' : 'Previsão do tempo (domingo a sábado)';
   if (sheetTitle) sheetTitle.textContent = preMode ? 'Planilha da pré-programação' : 'Planilha da semana';
   if (closeBtn) closeBtn.textContent = preMode ? 'Fechar pré-programação' : 'Fechar planejamento';
   if (reopenBtn) reopenBtn.classList.toggle('hidden', preMode);
-  if (exportExcelBtn) exportExcelBtn.classList.remove('hidden');
-  if (importExcelBtn) importExcelBtn.classList.remove('hidden');
-  const exportTxtBtn = $('#exportWeekTxtBtn');
-  const importTxtBtn = $('#importWeekTxtBtn');
-  if (exportTxtBtn) exportTxtBtn.classList.remove('hidden');
-  if (importTxtBtn) importTxtBtn.classList.remove('hidden');
   renderDeadlineCountdowns();
 }
 
@@ -4977,19 +4969,22 @@ async function addSheetDraftRows(count) {
   setStatus(`${qty} linha(s) em branco adicionada(s) na planilha.`);
 }
 
-function shiftSheetSequenceNumbersAfter(sequenceNumber) {
+function shiftSheetSequenceNumbersAfter(sequenceNumber, amount = 1) {
   const base = Number(sequenceNumber) || 0;
+  const delta = Math.max(0, Number(amount) || 0);
+  if (!delta) return;
   state.tasks.forEach((item) => {
     const current = Number(item.sequenceNumber) || 0;
-    if (current > base) item.sequenceNumber = current + 1;
+    if (current > base) item.sequenceNumber = current + delta;
   });
   state.sheetDraftRows.forEach((item) => {
     const current = Number(item.sequenceNumber) || 0;
-    if (current > base) item.sequenceNumber = current + 1;
+    if (current > base) item.sequenceNumber = current + delta;
   });
 }
 
 function createDraftFromSheetRow(row) {
+  const snapshot = capturePlanningGridState();
   const payload = getSheetRowPayload(row);
   const sourceSequence = Number.parseInt(
     row.querySelector('.sheet-seq')?.dataset.sequenceValue || row.querySelector('.sheet-seq')?.textContent || '',
@@ -5015,7 +5010,115 @@ function createDraftFromSheetRow(row) {
   });
   markScreenDirty('planning');
   renderTasks();
+  restorePlanningGridState(snapshot);
   setStatus('Linha duplicada na planilha.');
+}
+
+function planningRowSnapshotKey(row) {
+  if (!row) return '';
+  if (row.dataset.sheetRowKind === 'draft') return `draft:${row.dataset.draftId || ''}`;
+  return `task:${row.dataset.taskId || ''}`;
+}
+
+function capturePlanningGridState() {
+  const snapshot = new Map();
+  [...document.querySelectorAll('#tasksBody tr[data-sheet-row-kind]')].forEach((row) => {
+    const key = planningRowSnapshotKey(row);
+    if (!key) return;
+    snapshot.set(key, {
+      contractorId: row.querySelector('.sheet-contractor')?.value || '',
+      supervisor: row.querySelector('.sheet-supervisor')?.value || '',
+      locationLevel1: row.querySelector('.sheet-location1')?.value || '',
+      locationLevel2: row.querySelector('.sheet-location2')?.value || '',
+      description: row.querySelector('.sheet-desc')?.value || '',
+      plannedStart: row.querySelector('.sheet-start')?.value || '',
+      plannedEnd: row.querySelector('.sheet-end')?.value || '',
+      status: row.querySelector('.sheet-status')?.value || '',
+      plannedDays: [...row.querySelectorAll('.sheet-day:checked')].map((input) => String(input.dataset.weekday || '').toUpperCase()),
+    });
+  });
+  return snapshot;
+}
+
+function restorePlanningGridState(snapshot) {
+  if (!(snapshot instanceof Map) || !snapshot.size) return;
+  [...document.querySelectorAll('#tasksBody tr[data-sheet-row-kind]')].forEach((row) => {
+    const key = planningRowSnapshotKey(row);
+    if (!key || !snapshot.has(key)) return;
+    const saved = snapshot.get(key);
+    const contractorSelect = row.querySelector('.sheet-contractor');
+    if (contractorSelect && [...contractorSelect.options].some((opt) => opt.value === saved.contractorId)) {
+      contractorSelect.value = saved.contractorId;
+    }
+    const supervisorInput = row.querySelector('.sheet-supervisor');
+    if (supervisorInput) supervisorInput.value = saved.supervisor || '';
+    const laborLine = row.querySelector('.sheet-contractor-labor');
+    if (laborLine) {
+      laborLine.textContent = contractorLaborTypeLabel(
+        Number.parseInt(saved.contractorId || '', 10) || null,
+        contractorSelect?.dataset.laborType || '',
+      );
+    }
+    const location1Select = row.querySelector('.sheet-location1');
+    if (location1Select) location1Select.value = saved.locationLevel1 || '';
+    refreshSheetRowLocation2(row);
+    const location2Select = row.querySelector('.sheet-location2');
+    if (location2Select && [...location2Select.options].some((opt) => opt.value === (saved.locationLevel2 || ''))) {
+      location2Select.value = saved.locationLevel2 || '';
+    }
+    const descriptionInput = row.querySelector('.sheet-desc');
+    if (descriptionInput) descriptionInput.value = saved.description || '';
+    const plannedStartInput = row.querySelector('.sheet-start');
+    if (plannedStartInput) plannedStartInput.value = saved.plannedStart || '';
+    const plannedEndInput = row.querySelector('.sheet-end');
+    if (plannedEndInput) plannedEndInput.value = saved.plannedEnd || '';
+    const statusSelect = row.querySelector('.sheet-status');
+    if (statusSelect && saved.status && [...statusSelect.options].some((opt) => opt.value === saved.status)) {
+      statusSelect.value = saved.status;
+    }
+    row.querySelectorAll('.sheet-day').forEach((input) => {
+      input.checked = saved.plannedDays.includes(String(input.dataset.weekday || '').toUpperCase());
+    });
+    if (row.dataset.sheetRowKind === 'draft') syncDraftStateFromRow(row);
+  });
+}
+
+function buildDraftFromPlanningPayload(basePayload, description, sequenceNumber, originWeekNumber, index) {
+  const contractorId = Number(basePayload.contractorId) || null;
+  const contractor = (state.contractors || []).find((item) => Number(item.id) === contractorId) || null;
+  return {
+    draftId: `${Date.now()}-paste-${Math.random().toString(36).slice(2, 8)}-${index}`,
+    sequenceNumber,
+    originWeekNumber,
+    contractorId,
+    contractorLaborType: contractor?.function?.name || basePayload.contractorLaborType || contractor?.laborType || '',
+    supervisor: basePayload.supervisor || contractor?.supervisor || '',
+    locationLevel1: basePayload.locationLevel1 || '',
+    locationLevel2: basePayload.locationLevel2 || '',
+    description: String(description || '').trim(),
+    plannedStart: basePayload.plannedStart || '',
+    plannedEnd: basePayload.plannedEnd || '',
+    status: String(basePayload.status || 'PLANNED').toUpperCase(),
+    plannedDays: Array.isArray(basePayload.plannedDays) ? basePayload.plannedDays.map((item) => ({ ...item })) : [],
+  };
+}
+
+function insertPlanningDraftRowsAfterSequence(sequenceNumber, descriptions, basePayload = {}) {
+  const cleanDescriptions = descriptions
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+  if (!cleanDescriptions.length) return [];
+  const sourceSequence = Number(sequenceNumber) || nextSheetSequenceNumber();
+  shiftSheetSequenceNumbersAfter(sourceSequence, cleanDescriptions.length);
+  const originWeekNumber = Number(basePayload.originWeekNumber)
+    || Number(activeWeek()?.weekNumber)
+    || Number(numericWeekField())
+    || '';
+  const drafts = cleanDescriptions.map((description, index) => (
+    buildDraftFromPlanningPayload(basePayload, description, sourceSequence + index + 1, originWeekNumber, index)
+  ));
+  state.sheetDraftRows.push(...drafts);
+  return drafts;
 }
 
 function contractorOptionsHtml(selectedId, laborType = '') {
@@ -5139,18 +5242,18 @@ function renderSheetTaskRow(task, canEdit, _canCancel, isDraft = false) {
 
   const actions = [];
   if (editable) {
-    actions.push('<button type="button" class="secondary" data-sheet-duplicate="1">Duplicar</button>');
+    actions.push('<button type="button" class="icon-btn duplicate" data-sheet-duplicate="1" title="Duplicar" aria-label="Duplicar linha">2x</button>');
     if (isDraft) {
-      actions.push(`<button type="button" class="secondary" data-sheet-delete-draft="${escapeHtml(task.draftId)}">Excluir</button>`);
+      actions.push(`<button type="button" class="icon-btn delete" data-sheet-delete-draft="${escapeHtml(task.draftId)}" title="Excluir" aria-label="Excluir linha">X</button>`);
     } else {
       const canDelete = Number(task.originWeekId) === Number(task.currentWeekId);
-      if (canDelete) actions.push(`<button type="button" class="secondary" data-sheet-delete-task="${task.id}">Excluir</button>`);
+      if (canDelete) actions.push(`<button type="button" class="icon-btn delete" data-sheet-delete-task="${task.id}" title="Excluir" aria-label="Excluir linha">X</button>`);
       const canCancelCarried = isPrePlanningMode()
         ? (!canDelete && storedStatus !== 'CANCELLED')
         : (!canDelete && status === 'PENDENTE' && storedStatus !== 'RESERVA' && storedStatus !== 'CANCELLED');
       if (canCancelCarried) {
         const cancelAttr = isPrePlanningMode() ? 'data-sheet-cancel-pre-task' : 'data-sheet-cancel-task';
-        actions.push(`<button type="button" class="secondary" ${cancelAttr}="${task.id}">Excluir</button>`);
+        actions.push(`<button type="button" class="icon-btn delete" ${cancelAttr}="${task.id}" title="Excluir" aria-label="Excluir linha">X</button>`);
       }
     }
   }
@@ -7687,9 +7790,10 @@ function applyUiPermissions() {
   $('#weekRefreshBtn').disabled = !canEdit;
   $('#closePlanningBtn').disabled = !canEdit;
   $('#reopenBtn').disabled = !canEdit;
-  $('#importWeekExcelBtn').disabled = !canEdit;
+  if ($('#importWeekExcelBtn')) $('#importWeekExcelBtn').disabled = !canEdit;
   if ($('#importWeekTxtBtn')) $('#importWeekTxtBtn').disabled = !canEdit;
   if ($('#exportWeekTxtBtn')) $('#exportWeekTxtBtn').disabled = !canEdit;
+  if ($('#exportWeekExcelBtn')) $('#exportWeekExcelBtn').disabled = !canEdit;
   $('#saveWeekSheetBtn').disabled = !canEdit;
   $('#addRow1Btn').disabled = !canEdit;
   $('#addRow3Btn').disabled = !canEdit;
@@ -11932,10 +12036,12 @@ async function deleteSheetTask(taskId) {
 }
 
 function removeSheetDraft(draftId) {
+  const snapshot = capturePlanningGridState();
   state.sheetDraftRows = state.sheetDraftRows.filter((item) => item.draftId !== draftId);
   normalizeDraftSequenceNumbers();
   markScreenDirty('planning');
   renderTasks();
+  restorePlanningGridState(snapshot);
   setStatus('Linha de rascunho removida.');
 }
 
@@ -12055,6 +12161,60 @@ async function handleTaskAction(event) {
     removeSheetDraft(deleteDraftBtn.dataset.sheetDeleteDraft);
     return;
   }
+}
+
+function handleTaskTablePaste(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLTextAreaElement) || !target.classList.contains('sheet-desc')) return;
+  const row = sheetRowElementFromEventTarget(target);
+  if (!row || row.dataset.sheetEditable !== '1') return;
+  const rawText = event.clipboardData?.getData('text/plain') || '';
+  const lines = rawText
+    .split(/\r?\n/)
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+  if (lines.length <= 1) return;
+
+  event.preventDefault();
+
+  const snapshot = capturePlanningGridState();
+  const sourceSequence = Number.parseInt(
+    row.querySelector('.sheet-seq')?.dataset.sequenceValue || row.querySelector('.sheet-seq')?.textContent || '',
+    10,
+  ) || nextSheetSequenceNumber();
+  const currentDescription = String(target.value || '').trim();
+  let payloadBase;
+  try {
+    payloadBase = getSheetRowPayload(row);
+  } catch (error) {
+    setStatus(`Erro ao colar tarefas: ${error.message}`, true);
+    return;
+  }
+  let descriptionsToInsert = [...lines];
+
+  if (!currentDescription) {
+    const firstDescription = descriptionsToInsert.shift() || '';
+    target.value = firstDescription;
+    const rowKey = planningRowSnapshotKey(row);
+    if (rowKey) {
+      const saved = snapshot.get(rowKey) || {};
+      snapshot.set(rowKey, { ...saved, description: firstDescription });
+    }
+    if (row.dataset.sheetRowKind === 'draft') {
+      syncDraftStateFromRow(row);
+    }
+  }
+
+  if (!descriptionsToInsert.length) {
+    markScreenDirty('planning');
+    return;
+  }
+
+  insertPlanningDraftRowsAfterSequence(sourceSequence, descriptionsToInsert, payloadBase);
+  renderTasks();
+  restorePlanningGridState(snapshot);
+  markScreenDirty('planning');
+  setStatus(`${descriptionsToInsert.length} nova(s) linha(s) criada(s) a partir da colagem na coluna Tarefa.`);
 }
 
 function handleTaskTableChange(event) {
@@ -12540,12 +12700,12 @@ function bindEvents() {
 
   $('#closePlanningBtn').addEventListener('click', () => runWeekAction('close'));
   $('#reopenBtn').addEventListener('click', () => runWeekAction('reopen'));
-  $('#exportWeekExcelBtn').addEventListener('click', handleExportWeekExcel);
-  $('#exportWeekTxtBtn').addEventListener('click', handleExportWeekTxt);
-  $('#importWeekExcelBtn').addEventListener('click', () => handleImportWeekExcelClick().catch((error) => setStatus(`Erro ao preparar importação: ${error.message}`, true)));
-  $('#importWeekTxtBtn').addEventListener('click', () => handleImportWeekTxtClick().catch((error) => setStatus(`Erro ao preparar importação TXT/CSV: ${error.message}`, true)));
-  $('#importWeekExcelInput').addEventListener('change', handleImportWeekExcelFileChange);
-  $('#importWeekTxtInput').addEventListener('change', handleImportWeekTxtFileChange);
+  if ($('#exportWeekExcelBtn')) $('#exportWeekExcelBtn').addEventListener('click', handleExportWeekExcel);
+  if ($('#exportWeekTxtBtn')) $('#exportWeekTxtBtn').addEventListener('click', handleExportWeekTxt);
+  if ($('#importWeekExcelBtn')) $('#importWeekExcelBtn').addEventListener('click', () => handleImportWeekExcelClick().catch((error) => setStatus(`Erro ao preparar importação: ${error.message}`, true)));
+  if ($('#importWeekTxtBtn')) $('#importWeekTxtBtn').addEventListener('click', () => handleImportWeekTxtClick().catch((error) => setStatus(`Erro ao preparar importação TXT/CSV: ${error.message}`, true)));
+  if ($('#importWeekExcelInput')) $('#importWeekExcelInput').addEventListener('change', handleImportWeekExcelFileChange);
+  if ($('#importWeekTxtInput')) $('#importWeekTxtInput').addEventListener('change', handleImportWeekTxtFileChange);
   $('#saveWeekSheetBtn').addEventListener('click', handleSaveWeekSheet);
   $('#closePlanningValidationBtn').addEventListener('click', closePlanningValidationModal);
   $('#planningValidationModal').addEventListener('click', (event) => {
@@ -12579,6 +12739,7 @@ function bindEvents() {
   $('#tasksBody').addEventListener('click', handleTaskAction);
   $('#tasksBody').addEventListener('change', handleTaskTableChange);
   $('#tasksBody').addEventListener('input', handleTaskTableChange);
+  $('#tasksBody').addEventListener('paste', handleTaskTablePaste);
   ['planningFilterContractor', 'planningFilterLocation1', 'planningFilterLocation2', 'planningFilterTask', 'planningFilterMon', 'planningFilterTue', 'planningFilterWed', 'planningFilterThu', 'planningFilterFri', 'planningFilterSat', 'planningFilterStatus'].forEach((id) => {
     const el = $(`#${id}`);
     if (!el) return;

@@ -1057,18 +1057,11 @@
             <button id="importGroupBtn" type="button">Importar grupo de atividades</button>
             <button id="saveWeekSheetBtn" type="button">Salvar planilha da semana</button>
           </div>
-          <div class="actions-row">
-            <button id="exportWeekExcelBtn" type="button">Exportar tarefas (Excel)</button>
-            <button id="importWeekExcelBtn" type="button">Importar tarefas (Excel)</button>
-            <button id="exportWeekTxtBtn" type="button" class="secondary">Exportar tarefas (TXT/CSV)</button>
-            <button id="importWeekTxtBtn" type="button" class="secondary">Importar tarefas (TXT/CSV)</button>
-            <input id="importWeekExcelInput" type="file" accept=".xlsx,.xls" class="hidden" />
-            <input id="importWeekTxtInput" type="file" accept=".txt,.csv,.tsv,.text/plain" class="hidden" />
-          </div>
           <div class="subtle">
-            Sugestão: exporte a planilha base da semana e edite sobre ela (já inclui pendentes e reservas).<br>
-            Padrão TXT/CSV: colunas separadas por <strong>;</strong> e cabeçalhos iguais ao Excel exportado.
+            Dica: copie uma lista de tarefas com uma atividade por linha e cole com <strong>Ctrl + V</strong> em qualquer campo da coluna <strong>Tarefa</strong>. O sistema criará novas linhas automaticamente sem alterar as linhas já cadastradas.
           </div>
+          <input id="importWeekExcelInput" type="file" accept=".xlsx,.xls" class="hidden" />
+          <input id="importWeekTxtInput" type="file" accept=".txt,.csv,.tsv,.text/plain" class="hidden" />
           <div id="planningValidationModal" class="planning-modal hidden" role="dialog" aria-modal="true" aria-labelledby="planningValidationTitle">
             <article class="planning-modal-card">
               <h3 id="planningValidationTitle">Validação da Programação Semanal</h3>
