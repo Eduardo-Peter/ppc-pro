@@ -112,7 +112,7 @@ async function main() {
           },
           orderBy: { weekNumber: 'asc' },
           include: {
-            tasks: {
+            currentTasks: {
               include: {
                 contractor: { include: { function: true } },
                 location: true,
@@ -177,7 +177,7 @@ async function main() {
           (week.perceivedQualityItems || []).map((item) => [Number(item.contractorId), item]),
         );
 
-        week.tasks.forEach((task) => {
+        week.currentTasks.forEach((task) => {
           const contractorId = Number(task.contractorId || 0);
           const contractorName = task.contractor?.name || 'SEM EMPREITEIRO';
           const row = addMetricRow(byContractor, contractorId || `none-${task.id}`, {
