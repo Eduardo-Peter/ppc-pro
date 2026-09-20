@@ -5121,7 +5121,7 @@ function insertPlanningDraftRowsAfterSequence(sequenceNumber, descriptions, base
   return drafts;
 }
 
-function contractorOptionsHtml(selectedId, laborType = '') {
+function contractorOptionsHtml(selectedId, laborType = '', selectedFallbackLabel = '') {
   const selected = selectedId == null ? '' : String(selectedId);
   const filtered = contractorsForLaborType(laborType);
   const options = filtered.map((item) => {
@@ -5129,9 +5129,12 @@ function contractorOptionsHtml(selectedId, laborType = '') {
     return `<option value="${escapeHtml(value)}"${value === selected ? ' selected' : ''}>${escapeHtml(item.name || contractorDisplay(item))}</option>`;
   }).join('');
   const selectedContractor = state.contractors.find((item) => String(item.id) === selected);
-  const selectedMissing = Boolean(selected && selectedContractor && !filtered.some((item) => String(item.id) === selected));
+  const selectedMissing = Boolean(selected && !filtered.some((item) => String(item.id) === selected));
+  const selectedLabel = selectedContractor
+    ? (selectedContractor.name || contractorDisplay(selectedContractor))
+    : String(selectedFallbackLabel || '').trim();
   const selectedFallbackOption = selectedMissing
-    ? `<option value="${escapeHtml(selected)}" selected>${escapeHtml(selectedContractor.name || contractorDisplay(selectedContractor))}</option>`
+    ? `<option value="${escapeHtml(selected)}" selected>${escapeHtml(selectedLabel || `Empreiteiro #${selected}`)}</option>`
     : '';
   const placeholder = laborType
     ? (filtered.length ? `Selecione (${laborType})` : `Sem empreiteiro para ${laborType}`)
@@ -5221,7 +5224,7 @@ function renderSheetTaskRow(task, canEdit, _canCancel, isDraft = false) {
   const sequenceInput = `<span class="sheet-seq" data-sequence-value="${escapeHtml(task.sequenceNumber)}">${escapeHtml(task.sequenceNumber)}</span>`;
   const laborType = task.contractorLaborType || '';
   const selectedContractorId = task.contractorId || task.contractor?.id || '';
-  const contractorSelect = `<select class="sheet-contractor" data-labor-type="${escapeHtml(laborType)}" ${disabled}>${contractorOptionsHtml(selectedContractorId, laborType)}</select>`;
+  const contractorSelect = `<select class="sheet-contractor" data-labor-type="${escapeHtml(laborType)}" ${disabled}>${contractorOptionsHtml(selectedContractorId, laborType, task.contractor?.name || '')}</select>`;
   const contractorLaborLine = `<small class="sheet-contractor-labor">${escapeHtml(contractorLaborTypeLabel(selectedContractorId, laborType))}</small>`;
   const supervisorInput = `<input type="hidden" class="sheet-supervisor" value="${escapeHtml(task.supervisor || '')}" />`;
   const location1Select = `<select class="sheet-location1 ${lockPendingFields ? 'sheet-locked-cell' : ''}" ${pendingLockDisabled}>${locationLevel1OptionsHtml(level1)}</select>`;
@@ -6505,7 +6508,7 @@ function renderTasks() {
     ));
     const locationLevel1 = String(task.location?.level1 || '').trim();
     const locationLevel2 = displayLocationLevel2(task.location) === '-' ? '' : String(task.location?.level2 || '').trim();
-    const feedbackContractorCell = `<select class="${isUnplanned ? 'fb-unplanned-contractor' : 'fb-contractor'}" ${canFeedbackEdit ? '' : 'disabled'}>${contractorOptionsHtml(task.contractor?.id || task.contractorId || '', task.contractor?.function?.name || '')}</select>`;
+    const feedbackContractorCell = `<select class="${isUnplanned ? 'fb-unplanned-contractor' : 'fb-contractor'}" ${canFeedbackEdit ? '' : 'disabled'}>${contractorOptionsHtml(task.contractor?.id || task.contractorId || '', task.contractor?.function?.name || '', task.contractor?.name || '')}</select>`;
     const feedbackLocation1Cell = isUnplanned
       ? `<select class="fb-unplanned-location1" ${unplannedDisabled}>${locationLevel1OptionsHtml(locationLevel1)}</select>`
       : escapeHtml(task.location?.level1 || '-');
