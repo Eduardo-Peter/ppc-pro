@@ -23,6 +23,7 @@
     "db:fix:pg:seq": "node scripts/reset-postgres-sequences.js",
     "db:clear:work:history:pg": "node scripts/clear-work-history.js",
     "db:copy:planning:to:pre:pg": "node scripts/copy-week-planning-to-pre.js",
+    "db:audit:online": "node scripts/audit-online-metrics.js",
     "docs:pdf": "node scripts/generate-marketing-manual-pdfs.js",
     "db:seed:history": "node backend/prisma/seed-dashboard-history.js",
     "desktop": "echo \"Desktop app sera reconectado apos estabilizar backend\"",

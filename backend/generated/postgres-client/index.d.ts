@@ -22783,6 +22783,7 @@ export namespace Prisma {
 
   export type TaskMinAggregateOutputType = {
     id: number | null
+    activityIdentity: string | null
     sequenceNumber: number | null
     originWeekId: number | null
     currentWeekId: number | null
@@ -22805,6 +22806,7 @@ export namespace Prisma {
 
   export type TaskMaxAggregateOutputType = {
     id: number | null
+    activityIdentity: string | null
     sequenceNumber: number | null
     originWeekId: number | null
     currentWeekId: number | null
@@ -22827,6 +22829,7 @@ export namespace Prisma {
 
   export type TaskCountAggregateOutputType = {
     id: number
+    activityIdentity: number
     sequenceNumber: number
     originWeekId: number
     currentWeekId: number
@@ -22873,6 +22876,7 @@ export namespace Prisma {
 
   export type TaskMinAggregateInputType = {
     id?: true
+    activityIdentity?: true
     sequenceNumber?: true
     originWeekId?: true
     currentWeekId?: true
@@ -22895,6 +22899,7 @@ export namespace Prisma {
 
   export type TaskMaxAggregateInputType = {
     id?: true
+    activityIdentity?: true
     sequenceNumber?: true
     originWeekId?: true
     currentWeekId?: true
@@ -22917,6 +22922,7 @@ export namespace Prisma {
 
   export type TaskCountAggregateInputType = {
     id?: true
+    activityIdentity?: true
     sequenceNumber?: true
     originWeekId?: true
     currentWeekId?: true
@@ -23026,6 +23032,7 @@ export namespace Prisma {
 
   export type TaskGroupByOutputType = {
     id: number
+    activityIdentity: string | null
     sequenceNumber: number
     originWeekId: number
     currentWeekId: number
@@ -23067,6 +23074,7 @@ export namespace Prisma {
 
   export type TaskSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    activityIdentity?: boolean
     sequenceNumber?: boolean
     originWeekId?: boolean
     currentWeekId?: boolean
@@ -23099,6 +23107,7 @@ export namespace Prisma {
 
   export type TaskSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    activityIdentity?: boolean
     sequenceNumber?: boolean
     originWeekId?: boolean
     currentWeekId?: boolean
@@ -23127,6 +23136,7 @@ export namespace Prisma {
 
   export type TaskSelectScalar = {
     id?: boolean
+    activityIdentity?: boolean
     sequenceNumber?: boolean
     originWeekId?: boolean
     currentWeekId?: boolean
@@ -23183,6 +23193,7 @@ export namespace Prisma {
     }
     scalars: $Extensions.GetPayloadResult<{
       id: number
+      activityIdentity: string | null
       sequenceNumber: number
       originWeekId: number
       currentWeekId: number
@@ -23604,6 +23615,7 @@ export namespace Prisma {
    */ 
   interface TaskFieldRefs {
     readonly id: FieldRef<"Task", 'Int'>
+    readonly activityIdentity: FieldRef<"Task", 'String'>
     readonly sequenceNumber: FieldRef<"Task", 'Int'>
     readonly originWeekId: FieldRef<"Task", 'Int'>
     readonly currentWeekId: FieldRef<"Task", 'Int'>
@@ -24106,6 +24118,7 @@ export namespace Prisma {
 
   export type PreTaskMinAggregateOutputType = {
     id: number | null
+    activityIdentity: string | null
     sequenceNumber: number | null
     originWeekId: number | null
     weekId: number | null
@@ -24122,6 +24135,7 @@ export namespace Prisma {
 
   export type PreTaskMaxAggregateOutputType = {
     id: number | null
+    activityIdentity: string | null
     sequenceNumber: number | null
     originWeekId: number | null
     weekId: number | null
@@ -24138,6 +24152,7 @@ export namespace Prisma {
 
   export type PreTaskCountAggregateOutputType = {
     id: number
+    activityIdentity: number
     sequenceNumber: number
     originWeekId: number
     weekId: number
@@ -24174,6 +24189,7 @@ export namespace Prisma {
 
   export type PreTaskMinAggregateInputType = {
     id?: true
+    activityIdentity?: true
     sequenceNumber?: true
     originWeekId?: true
     weekId?: true
@@ -24190,6 +24206,7 @@ export namespace Prisma {
 
   export type PreTaskMaxAggregateInputType = {
     id?: true
+    activityIdentity?: true
     sequenceNumber?: true
     originWeekId?: true
     weekId?: true
@@ -24206,6 +24223,7 @@ export namespace Prisma {
 
   export type PreTaskCountAggregateInputType = {
     id?: true
+    activityIdentity?: true
     sequenceNumber?: true
     originWeekId?: true
     weekId?: true
@@ -24309,6 +24327,7 @@ export namespace Prisma {
 
   export type PreTaskGroupByOutputType = {
     id: number
+    activityIdentity: string | null
     sequenceNumber: number
     originWeekId: number
     weekId: number
@@ -24344,6 +24363,7 @@ export namespace Prisma {
 
   export type PreTaskSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    activityIdentity?: boolean
     sequenceNumber?: boolean
     originWeekId?: boolean
     weekId?: boolean
@@ -24366,6 +24386,7 @@ export namespace Prisma {
 
   export type PreTaskSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    activityIdentity?: boolean
     sequenceNumber?: boolean
     originWeekId?: boolean
     weekId?: boolean
@@ -24386,6 +24407,7 @@ export namespace Prisma {
 
   export type PreTaskSelectScalar = {
     id?: boolean
+    activityIdentity?: boolean
     sequenceNumber?: boolean
     originWeekId?: boolean
     weekId?: boolean
@@ -24426,6 +24448,7 @@ export namespace Prisma {
     }
     scalars: $Extensions.GetPayloadResult<{
       id: number
+      activityIdentity: string | null
       sequenceNumber: number
       originWeekId: number
       weekId: number
@@ -24837,6 +24860,7 @@ export namespace Prisma {
    */ 
   interface PreTaskFieldRefs {
     readonly id: FieldRef<"PreTask", 'Int'>
+    readonly activityIdentity: FieldRef<"PreTask", 'String'>
     readonly sequenceNumber: FieldRef<"PreTask", 'Int'>
     readonly originWeekId: FieldRef<"PreTask", 'Int'>
     readonly weekId: FieldRef<"PreTask", 'Int'>
@@ -38042,6 +38066,7 @@ export namespace Prisma {
 
   export const TaskScalarFieldEnum: {
     id: 'id',
+    activityIdentity: 'activityIdentity',
     sequenceNumber: 'sequenceNumber',
     originWeekId: 'originWeekId',
     currentWeekId: 'currentWeekId',
@@ -38067,6 +38092,7 @@ export namespace Prisma {
 
   export const PreTaskScalarFieldEnum: {
     id: 'id',
+    activityIdentity: 'activityIdentity',
     sequenceNumber: 'sequenceNumber',
     originWeekId: 'originWeekId',
     weekId: 'weekId',
@@ -39727,6 +39753,7 @@ export namespace Prisma {
     OR?: TaskWhereInput[]
     NOT?: TaskWhereInput | TaskWhereInput[]
     id?: IntFilter<"Task"> | number
+    activityIdentity?: StringNullableFilter<"Task"> | string | null
     sequenceNumber?: IntFilter<"Task"> | number
     originWeekId?: IntFilter<"Task"> | number
     currentWeekId?: IntFilter<"Task"> | number
@@ -39758,6 +39785,7 @@ export namespace Prisma {
 
   export type TaskOrderByWithRelationInput = {
     id?: SortOrder
+    activityIdentity?: SortOrderInput | SortOrder
     sequenceNumber?: SortOrder
     originWeekId?: SortOrder
     currentWeekId?: SortOrder
@@ -39792,6 +39820,7 @@ export namespace Prisma {
     AND?: TaskWhereInput | TaskWhereInput[]
     OR?: TaskWhereInput[]
     NOT?: TaskWhereInput | TaskWhereInput[]
+    activityIdentity?: StringNullableFilter<"Task"> | string | null
     sequenceNumber?: IntFilter<"Task"> | number
     originWeekId?: IntFilter<"Task"> | number
     currentWeekId?: IntFilter<"Task"> | number
@@ -39823,6 +39852,7 @@ export namespace Prisma {
 
   export type TaskOrderByWithAggregationInput = {
     id?: SortOrder
+    activityIdentity?: SortOrderInput | SortOrder
     sequenceNumber?: SortOrder
     originWeekId?: SortOrder
     currentWeekId?: SortOrder
@@ -39853,6 +39883,7 @@ export namespace Prisma {
     OR?: TaskScalarWhereWithAggregatesInput[]
     NOT?: TaskScalarWhereWithAggregatesInput | TaskScalarWhereWithAggregatesInput[]
     id?: IntWithAggregatesFilter<"Task"> | number
+    activityIdentity?: StringNullableWithAggregatesFilter<"Task"> | string | null
     sequenceNumber?: IntWithAggregatesFilter<"Task"> | number
     originWeekId?: IntWithAggregatesFilter<"Task"> | number
     currentWeekId?: IntWithAggregatesFilter<"Task"> | number
@@ -39878,6 +39909,7 @@ export namespace Prisma {
     OR?: PreTaskWhereInput[]
     NOT?: PreTaskWhereInput | PreTaskWhereInput[]
     id?: IntFilter<"PreTask"> | number
+    activityIdentity?: StringNullableFilter<"PreTask"> | string | null
     sequenceNumber?: IntFilter<"PreTask"> | number
     originWeekId?: IntFilter<"PreTask"> | number
     weekId?: IntFilter<"PreTask"> | number
@@ -39899,6 +39931,7 @@ export namespace Prisma {
 
   export type PreTaskOrderByWithRelationInput = {
     id?: SortOrder
+    activityIdentity?: SortOrderInput | SortOrder
     sequenceNumber?: SortOrder
     originWeekId?: SortOrder
     weekId?: SortOrder
@@ -39923,6 +39956,7 @@ export namespace Prisma {
     AND?: PreTaskWhereInput | PreTaskWhereInput[]
     OR?: PreTaskWhereInput[]
     NOT?: PreTaskWhereInput | PreTaskWhereInput[]
+    activityIdentity?: StringNullableFilter<"PreTask"> | string | null
     sequenceNumber?: IntFilter<"PreTask"> | number
     originWeekId?: IntFilter<"PreTask"> | number
     weekId?: IntFilter<"PreTask"> | number
@@ -39944,6 +39978,7 @@ export namespace Prisma {
 
   export type PreTaskOrderByWithAggregationInput = {
     id?: SortOrder
+    activityIdentity?: SortOrderInput | SortOrder
     sequenceNumber?: SortOrder
     originWeekId?: SortOrder
     weekId?: SortOrder
@@ -39968,6 +40003,7 @@ export namespace Prisma {
     OR?: PreTaskScalarWhereWithAggregatesInput[]
     NOT?: PreTaskScalarWhereWithAggregatesInput | PreTaskScalarWhereWithAggregatesInput[]
     id?: IntWithAggregatesFilter<"PreTask"> | number
+    activityIdentity?: StringNullableWithAggregatesFilter<"PreTask"> | string | null
     sequenceNumber?: IntWithAggregatesFilter<"PreTask"> | number
     originWeekId?: IntWithAggregatesFilter<"PreTask"> | number
     weekId?: IntWithAggregatesFilter<"PreTask"> | number
@@ -42339,6 +42375,7 @@ export namespace Prisma {
   }
 
   export type TaskCreateInput = {
+    activityIdentity?: string | null
     sequenceNumber: number
     supervisor?: string | null
     description: string
@@ -42364,6 +42401,7 @@ export namespace Prisma {
 
   export type TaskUncheckedCreateInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     currentWeekId: number
@@ -42388,6 +42426,7 @@ export namespace Prisma {
   }
 
   export type TaskUpdateInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -42413,6 +42452,7 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     currentWeekId?: IntFieldUpdateOperationsInput | number
@@ -42438,6 +42478,7 @@ export namespace Prisma {
 
   export type TaskCreateManyInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     currentWeekId: number
@@ -42459,6 +42500,7 @@ export namespace Prisma {
   }
 
   export type TaskUpdateManyMutationInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -42475,6 +42517,7 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateManyInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     currentWeekId?: IntFieldUpdateOperationsInput | number
@@ -42496,6 +42539,7 @@ export namespace Prisma {
   }
 
   export type PreTaskCreateInput = {
+    activityIdentity?: string | null
     sequenceNumber: number
     supervisor?: string | null
     description: string
@@ -42513,6 +42557,7 @@ export namespace Prisma {
 
   export type PreTaskUncheckedCreateInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     weekId: number
@@ -42529,6 +42574,7 @@ export namespace Prisma {
   }
 
   export type PreTaskUpdateInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -42546,6 +42592,7 @@ export namespace Prisma {
 
   export type PreTaskUncheckedUpdateInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     weekId?: IntFieldUpdateOperationsInput | number
@@ -42563,6 +42610,7 @@ export namespace Prisma {
 
   export type PreTaskCreateManyInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     weekId: number
@@ -42578,6 +42626,7 @@ export namespace Prisma {
   }
 
   export type PreTaskUpdateManyMutationInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -42590,6 +42639,7 @@ export namespace Prisma {
 
   export type PreTaskUncheckedUpdateManyInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     weekId?: IntFieldUpdateOperationsInput | number
@@ -44993,6 +45043,7 @@ export namespace Prisma {
 
   export type TaskCountOrderByAggregateInput = {
     id?: SortOrder
+    activityIdentity?: SortOrder
     sequenceNumber?: SortOrder
     originWeekId?: SortOrder
     currentWeekId?: SortOrder
@@ -45026,6 +45077,7 @@ export namespace Prisma {
 
   export type TaskMaxOrderByAggregateInput = {
     id?: SortOrder
+    activityIdentity?: SortOrder
     sequenceNumber?: SortOrder
     originWeekId?: SortOrder
     currentWeekId?: SortOrder
@@ -45048,6 +45100,7 @@ export namespace Prisma {
 
   export type TaskMinOrderByAggregateInput = {
     id?: SortOrder
+    activityIdentity?: SortOrder
     sequenceNumber?: SortOrder
     originWeekId?: SortOrder
     currentWeekId?: SortOrder
@@ -45091,6 +45144,7 @@ export namespace Prisma {
 
   export type PreTaskCountOrderByAggregateInput = {
     id?: SortOrder
+    activityIdentity?: SortOrder
     sequenceNumber?: SortOrder
     originWeekId?: SortOrder
     weekId?: SortOrder
@@ -45116,6 +45170,7 @@ export namespace Prisma {
 
   export type PreTaskMaxOrderByAggregateInput = {
     id?: SortOrder
+    activityIdentity?: SortOrder
     sequenceNumber?: SortOrder
     originWeekId?: SortOrder
     weekId?: SortOrder
@@ -45132,6 +45187,7 @@ export namespace Prisma {
 
   export type PreTaskMinOrderByAggregateInput = {
     id?: SortOrder
+    activityIdentity?: SortOrder
     sequenceNumber?: SortOrder
     originWeekId?: SortOrder
     weekId?: SortOrder
@@ -50677,6 +50733,7 @@ export namespace Prisma {
   }
 
   export type TaskCreateWithoutCanceledByInput = {
+    activityIdentity?: string | null
     sequenceNumber: number
     supervisor?: string | null
     description: string
@@ -50701,6 +50758,7 @@ export namespace Prisma {
 
   export type TaskUncheckedCreateWithoutCanceledByInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     currentWeekId: number
@@ -51179,6 +51237,7 @@ export namespace Prisma {
     OR?: TaskScalarWhereInput[]
     NOT?: TaskScalarWhereInput | TaskScalarWhereInput[]
     id?: IntFilter<"Task"> | number
+    activityIdentity?: StringNullableFilter<"Task"> | string | null
     sequenceNumber?: IntFilter<"Task"> | number
     originWeekId?: IntFilter<"Task"> | number
     currentWeekId?: IntFilter<"Task"> | number
@@ -52450,6 +52509,7 @@ export namespace Prisma {
   }
 
   export type TaskCreateWithoutContractorInput = {
+    activityIdentity?: string | null
     sequenceNumber: number
     supervisor?: string | null
     description: string
@@ -52474,6 +52534,7 @@ export namespace Prisma {
 
   export type TaskUncheckedCreateWithoutContractorInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     currentWeekId: number
@@ -52507,6 +52568,7 @@ export namespace Prisma {
   }
 
   export type PreTaskCreateWithoutContractorInput = {
+    activityIdentity?: string | null
     sequenceNumber: number
     supervisor?: string | null
     description: string
@@ -52523,6 +52585,7 @@ export namespace Prisma {
 
   export type PreTaskUncheckedCreateWithoutContractorInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     weekId: number
@@ -52808,6 +52871,7 @@ export namespace Prisma {
     OR?: PreTaskScalarWhereInput[]
     NOT?: PreTaskScalarWhereInput | PreTaskScalarWhereInput[]
     id?: IntFilter<"PreTask"> | number
+    activityIdentity?: StringNullableFilter<"PreTask"> | string | null
     sequenceNumber?: IntFilter<"PreTask"> | number
     originWeekId?: IntFilter<"PreTask"> | number
     weekId?: IntFilter<"PreTask"> | number
@@ -52991,6 +53055,7 @@ export namespace Prisma {
   }
 
   export type TaskCreateWithoutLocationInput = {
+    activityIdentity?: string | null
     sequenceNumber: number
     supervisor?: string | null
     description: string
@@ -53015,6 +53080,7 @@ export namespace Prisma {
 
   export type TaskUncheckedCreateWithoutLocationInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     currentWeekId: number
@@ -53048,6 +53114,7 @@ export namespace Prisma {
   }
 
   export type PreTaskCreateWithoutLocationInput = {
+    activityIdentity?: string | null
     sequenceNumber: number
     supervisor?: string | null
     description: string
@@ -53064,6 +53131,7 @@ export namespace Prisma {
 
   export type PreTaskUncheckedCreateWithoutLocationInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     weekId: number
@@ -53919,6 +53987,7 @@ export namespace Prisma {
   }
 
   export type TaskCreateWithoutOriginWeekInput = {
+    activityIdentity?: string | null
     sequenceNumber: number
     supervisor?: string | null
     description: string
@@ -53943,6 +54012,7 @@ export namespace Prisma {
 
   export type TaskUncheckedCreateWithoutOriginWeekInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     currentWeekId: number
     contractorId?: number | null
@@ -53976,6 +54046,7 @@ export namespace Prisma {
   }
 
   export type PreTaskCreateWithoutOriginWeekInput = {
+    activityIdentity?: string | null
     sequenceNumber: number
     supervisor?: string | null
     description: string
@@ -53992,6 +54063,7 @@ export namespace Prisma {
 
   export type PreTaskUncheckedCreateWithoutOriginWeekInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     weekId: number
     contractorId?: number | null
@@ -54017,6 +54089,7 @@ export namespace Prisma {
   }
 
   export type TaskCreateWithoutCurrentWeekInput = {
+    activityIdentity?: string | null
     sequenceNumber: number
     supervisor?: string | null
     description: string
@@ -54041,6 +54114,7 @@ export namespace Prisma {
 
   export type TaskUncheckedCreateWithoutCurrentWeekInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     contractorId?: number | null
@@ -54074,6 +54148,7 @@ export namespace Prisma {
   }
 
   export type PreTaskCreateWithoutWeekInput = {
+    activityIdentity?: string | null
     sequenceNumber: number
     supervisor?: string | null
     description: string
@@ -54090,6 +54165,7 @@ export namespace Prisma {
 
   export type PreTaskUncheckedCreateWithoutWeekInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     contractorId?: number | null
@@ -55693,6 +55769,7 @@ export namespace Prisma {
   }
 
   export type TaskCreateWithoutRolledToTasksInput = {
+    activityIdentity?: string | null
     sequenceNumber: number
     supervisor?: string | null
     description: string
@@ -55717,6 +55794,7 @@ export namespace Prisma {
 
   export type TaskUncheckedCreateWithoutRolledToTasksInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     currentWeekId: number
@@ -55745,6 +55823,7 @@ export namespace Prisma {
   }
 
   export type TaskCreateWithoutRolledFromTaskInput = {
+    activityIdentity?: string | null
     sequenceNumber: number
     supervisor?: string | null
     description: string
@@ -55769,6 +55848,7 @@ export namespace Prisma {
 
   export type TaskUncheckedCreateWithoutRolledFromTaskInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     currentWeekId: number
@@ -56137,6 +56217,7 @@ export namespace Prisma {
   }
 
   export type TaskUpdateWithoutRolledToTasksInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -56161,6 +56242,7 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateWithoutRolledToTasksInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     currentWeekId?: IntFieldUpdateOperationsInput | number
@@ -56758,6 +56840,7 @@ export namespace Prisma {
   }
 
   export type PreTaskCreateWithoutPlannedDaysInput = {
+    activityIdentity?: string | null
     sequenceNumber: number
     supervisor?: string | null
     description: string
@@ -56774,6 +56857,7 @@ export namespace Prisma {
 
   export type PreTaskUncheckedCreateWithoutPlannedDaysInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     weekId: number
@@ -56805,6 +56889,7 @@ export namespace Prisma {
   }
 
   export type PreTaskUpdateWithoutPlannedDaysInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -56821,6 +56906,7 @@ export namespace Prisma {
 
   export type PreTaskUncheckedUpdateWithoutPlannedDaysInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     weekId?: IntFieldUpdateOperationsInput | number
@@ -56836,6 +56922,7 @@ export namespace Prisma {
   }
 
   export type TaskCreateWithoutPlannedDaysInput = {
+    activityIdentity?: string | null
     sequenceNumber: number
     supervisor?: string | null
     description: string
@@ -56860,6 +56947,7 @@ export namespace Prisma {
 
   export type TaskUncheckedCreateWithoutPlannedDaysInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     currentWeekId: number
@@ -56899,6 +56987,7 @@ export namespace Prisma {
   }
 
   export type TaskUpdateWithoutPlannedDaysInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -56923,6 +57012,7 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateWithoutPlannedDaysInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     currentWeekId?: IntFieldUpdateOperationsInput | number
@@ -56946,6 +57036,7 @@ export namespace Prisma {
   }
 
   export type TaskCreateWithoutFeedbacksInput = {
+    activityIdentity?: string | null
     sequenceNumber: number
     supervisor?: string | null
     description: string
@@ -56970,6 +57061,7 @@ export namespace Prisma {
 
   export type TaskUncheckedCreateWithoutFeedbacksInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     currentWeekId: number
@@ -57153,6 +57245,7 @@ export namespace Prisma {
   }
 
   export type TaskUpdateWithoutFeedbacksInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -57177,6 +57270,7 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateWithoutFeedbacksInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     currentWeekId?: IntFieldUpdateOperationsInput | number
@@ -59343,6 +59437,7 @@ export namespace Prisma {
 
   export type TaskCreateManyCanceledByInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     currentWeekId: number
@@ -60006,6 +60101,7 @@ export namespace Prisma {
   }
 
   export type TaskUpdateWithoutCanceledByInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -60030,6 +60126,7 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateWithoutCanceledByInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     currentWeekId?: IntFieldUpdateOperationsInput | number
@@ -60054,6 +60151,7 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateManyWithoutCanceledByInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     currentWeekId?: IntFieldUpdateOperationsInput | number
@@ -60430,6 +60528,7 @@ export namespace Prisma {
 
   export type TaskCreateManyContractorInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     currentWeekId: number
@@ -60451,6 +60550,7 @@ export namespace Prisma {
 
   export type PreTaskCreateManyContractorInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     weekId: number
@@ -60505,6 +60605,7 @@ export namespace Prisma {
   }
 
   export type TaskUpdateWithoutContractorInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -60529,6 +60630,7 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateWithoutContractorInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     currentWeekId?: IntFieldUpdateOperationsInput | number
@@ -60553,6 +60655,7 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateManyWithoutContractorInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     currentWeekId?: IntFieldUpdateOperationsInput | number
@@ -60573,6 +60676,7 @@ export namespace Prisma {
   }
 
   export type PreTaskUpdateWithoutContractorInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -60589,6 +60693,7 @@ export namespace Prisma {
 
   export type PreTaskUncheckedUpdateWithoutContractorInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     weekId?: IntFieldUpdateOperationsInput | number
@@ -60605,6 +60710,7 @@ export namespace Prisma {
 
   export type PreTaskUncheckedUpdateManyWithoutContractorInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     weekId?: IntFieldUpdateOperationsInput | number
@@ -60770,6 +60876,7 @@ export namespace Prisma {
 
   export type TaskCreateManyLocationInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     currentWeekId: number
@@ -60791,6 +60898,7 @@ export namespace Prisma {
 
   export type PreTaskCreateManyLocationInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     weekId: number
@@ -60805,6 +60913,7 @@ export namespace Prisma {
   }
 
   export type TaskUpdateWithoutLocationInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -60829,6 +60938,7 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateWithoutLocationInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     currentWeekId?: IntFieldUpdateOperationsInput | number
@@ -60853,6 +60963,7 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateManyWithoutLocationInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     currentWeekId?: IntFieldUpdateOperationsInput | number
@@ -60873,6 +60984,7 @@ export namespace Prisma {
   }
 
   export type PreTaskUpdateWithoutLocationInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -60889,6 +61001,7 @@ export namespace Prisma {
 
   export type PreTaskUncheckedUpdateWithoutLocationInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     weekId?: IntFieldUpdateOperationsInput | number
@@ -60905,6 +61018,7 @@ export namespace Prisma {
 
   export type PreTaskUncheckedUpdateManyWithoutLocationInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     weekId?: IntFieldUpdateOperationsInput | number
@@ -60998,6 +61112,7 @@ export namespace Prisma {
 
   export type TaskCreateManyOriginWeekInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     currentWeekId: number
     contractorId?: number | null
@@ -61019,6 +61134,7 @@ export namespace Prisma {
 
   export type PreTaskCreateManyOriginWeekInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     weekId: number
     contractorId?: number | null
@@ -61034,6 +61150,7 @@ export namespace Prisma {
 
   export type TaskCreateManyCurrentWeekInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     contractorId?: number | null
@@ -61055,6 +61172,7 @@ export namespace Prisma {
 
   export type PreTaskCreateManyWeekInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     contractorId?: number | null
@@ -61113,6 +61231,7 @@ export namespace Prisma {
   }
 
   export type TaskUpdateWithoutOriginWeekInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -61137,6 +61256,7 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateWithoutOriginWeekInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     currentWeekId?: IntFieldUpdateOperationsInput | number
     contractorId?: NullableIntFieldUpdateOperationsInput | number | null
@@ -61161,6 +61281,7 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateManyWithoutOriginWeekInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     currentWeekId?: IntFieldUpdateOperationsInput | number
     contractorId?: NullableIntFieldUpdateOperationsInput | number | null
@@ -61181,6 +61302,7 @@ export namespace Prisma {
   }
 
   export type PreTaskUpdateWithoutOriginWeekInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -61197,6 +61319,7 @@ export namespace Prisma {
 
   export type PreTaskUncheckedUpdateWithoutOriginWeekInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     weekId?: IntFieldUpdateOperationsInput | number
     contractorId?: NullableIntFieldUpdateOperationsInput | number | null
@@ -61213,6 +61336,7 @@ export namespace Prisma {
 
   export type PreTaskUncheckedUpdateManyWithoutOriginWeekInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     weekId?: IntFieldUpdateOperationsInput | number
     contractorId?: NullableIntFieldUpdateOperationsInput | number | null
@@ -61227,6 +61351,7 @@ export namespace Prisma {
   }
 
   export type TaskUpdateWithoutCurrentWeekInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -61251,6 +61376,7 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateWithoutCurrentWeekInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     contractorId?: NullableIntFieldUpdateOperationsInput | number | null
@@ -61275,6 +61401,7 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateManyWithoutCurrentWeekInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     contractorId?: NullableIntFieldUpdateOperationsInput | number | null
@@ -61295,6 +61422,7 @@ export namespace Prisma {
   }
 
   export type PreTaskUpdateWithoutWeekInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -61311,6 +61439,7 @@ export namespace Prisma {
 
   export type PreTaskUncheckedUpdateWithoutWeekInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     contractorId?: NullableIntFieldUpdateOperationsInput | number | null
@@ -61327,6 +61456,7 @@ export namespace Prisma {
 
   export type PreTaskUncheckedUpdateManyWithoutWeekInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     contractorId?: NullableIntFieldUpdateOperationsInput | number | null
@@ -61501,6 +61631,7 @@ export namespace Prisma {
 
   export type TaskCreateManyRolledFromTaskInput = {
     id?: number
+    activityIdentity?: string | null
     sequenceNumber: number
     originWeekId: number
     currentWeekId: number
@@ -61538,6 +61669,7 @@ export namespace Prisma {
   }
 
   export type TaskUpdateWithoutRolledFromTaskInput = {
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     supervisor?: NullableStringFieldUpdateOperationsInput | string | null
     description?: StringFieldUpdateOperationsInput | string
@@ -61562,6 +61694,7 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateWithoutRolledFromTaskInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     currentWeekId?: IntFieldUpdateOperationsInput | number
@@ -61586,6 +61719,7 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateManyWithoutRolledFromTaskInput = {
     id?: IntFieldUpdateOperationsInput | number
+    activityIdentity?: NullableStringFieldUpdateOperationsInput | string | null
     sequenceNumber?: IntFieldUpdateOperationsInput | number
     originWeekId?: IntFieldUpdateOperationsInput | number
     currentWeekId?: IntFieldUpdateOperationsInput | number

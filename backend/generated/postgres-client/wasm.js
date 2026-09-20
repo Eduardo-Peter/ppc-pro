@@ -295,6 +295,7 @@ exports.Prisma.HolidayScalarFieldEnum = {
 
 exports.Prisma.TaskScalarFieldEnum = {
   id: 'id',
+  activityIdentity: 'activityIdentity',
   sequenceNumber: 'sequenceNumber',
   originWeekId: 'originWeekId',
   currentWeekId: 'currentWeekId',
@@ -317,6 +318,7 @@ exports.Prisma.TaskScalarFieldEnum = {
 
 exports.Prisma.PreTaskScalarFieldEnum = {
   id: 'id',
+  activityIdentity: 'activityIdentity',
   sequenceNumber: 'sequenceNumber',
   originWeekId: 'originWeekId',
   weekId: 'weekId',

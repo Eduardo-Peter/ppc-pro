@@ -1,4 +1,5 @@
 const { Router } = require('express');
+const { randomUUID } = require('crypto');
 const { prisma } = require('../lib/prisma');
 const { writeAudit } = require('../lib/audit');
 const { ROLES, TASK_STATUS, WEEK_STATUS } = require('../lib/constants');
@@ -373,12 +374,13 @@ async function rollPendingTasksToNextWeek(sourceWeek, nextWeek) {
     return parsed.toISOString().slice(0, 10);
   };
   const sameCarryoverIdentity = (left, right) => (
-    Number(left?.originWeekId || 0) === Number(right?.originWeekId || 0)
+    (left?.activityIdentity && right?.activityIdentity && left.activityIdentity === right.activityIdentity)
+    || (Number(left?.originWeekId || 0) === Number(right?.originWeekId || 0)
     && Number(left?.contractorId || 0) === Number(right?.contractorId || 0)
     && Number(left?.locationId || 0) === Number(right?.locationId || 0)
     && normalizeText(left?.description) === normalizeText(right?.description)
     && normalizeDateKey(left?.plannedStart) === normalizeDateKey(right?.plannedStart)
-    && normalizeDateKey(left?.plannedEnd) === normalizeDateKey(right?.plannedEnd)
+    && normalizeDateKey(left?.plannedEnd) === normalizeDateKey(right?.plannedEnd))
   );
 
   const pending = await prisma.task.findMany({
@@ -397,6 +399,7 @@ async function rollPendingTasksToNextWeek(sourceWeek, nextWeek) {
       where: { weekId: nextWeek.id },
       select: {
         id: true,
+        activityIdentity: true,
         originWeekId: true,
         contractorId: true,
         locationId: true,
@@ -410,6 +413,7 @@ async function rollPendingTasksToNextWeek(sourceWeek, nextWeek) {
       where: { currentWeekId: nextWeek.id },
       select: {
         id: true,
+        activityIdentity: true,
         originWeekId: true,
         contractorId: true,
         locationId: true,
@@ -444,6 +448,7 @@ async function rollPendingTasksToNextWeek(sourceWeek, nextWeek) {
     const alreadyExists = await prisma.preTask.findFirst({
       where: {
         weekId: nextWeek.id,
+        ...(item.activityIdentity ? { activityIdentity: item.activityIdentity } : {}),
         originWeekId: item.originWeekId,
         contractorId: item.contractorId,
         locationId: item.locationId,
@@ -460,6 +465,7 @@ async function rollPendingTasksToNextWeek(sourceWeek, nextWeek) {
     const task = await prisma.preTask.create({
       data: {
         sequenceNumber: seq++,
+        activityIdentity: item.activityIdentity || randomUUID(),
         originWeekId: item.originWeekId,
         weekId: nextWeek.id,
         contractorId: item.contractorId,
@@ -1669,10 +1675,19 @@ router.post('/weeks/:weekId/close-pre-planning', authenticate, loadUser, require
     await tx.task.deleteMany({ where: { currentWeekId: req.week.id } });
 
     for (const item of preTasks) {
+      const activityIdentity = item.activityIdentity || randomUUID();
+      if (!item.activityIdentity) {
+        // eslint-disable-next-line no-await-in-loop
+        await tx.preTask.update({
+          where: { id: item.id },
+          data: { activityIdentity },
+        });
+      }
       // eslint-disable-next-line no-await-in-loop
       await tx.task.create({
         data: {
           sequenceNumber: item.sequenceNumber,
+          activityIdentity,
           originWeekId: item.originWeekId || req.week.id,
           currentWeekId: req.week.id,
           contractorId: item.contractorId || null,
@@ -1912,6 +1927,7 @@ router.post('/weeks/:weekId/feedback/unplanned-task', authenticate, loadUser, re
 
   const created = await prisma.task.create({
     data: {
+      activityIdentity: randomUUID(),
       sequenceNumber: nextSeq,
       originWeekId: req.week.id,
       currentWeekId: req.week.id,
@@ -2096,7 +2112,9 @@ router.post('/weeks/:weekId/feedback', authenticate, loadUser, requireWeekRoles(
     let taskStatus = normalizeTaskStatus(feedbackStatus);
     const taskIsReserve = String(task?.status || '').toUpperCase() === TASK_STATUS.RESERVA;
     const reserveNotExecuted = taskIsReserve && feedbackStatus !== 'EXECUTED' && feedbackStatus !== 'EXECUTED_UNPLANNED';
-    if (
+    if (feedbackStatus === 'CANCELLED') {
+      taskStatus = TASK_STATUS.CANCELLED;
+    } else if (
       (originalTaskStatus === TASK_STATUS.RESERVA || originalTaskStatus === TASK_STATUS.RETRABALHO)
       && feedbackStatus !== 'EXECUTED'
       && feedbackStatus !== 'EXECUTED_UNPLANNED'

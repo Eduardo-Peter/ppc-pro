@@ -293,6 +293,7 @@ model Holiday {
 
 model Task {
   id               Int              @id @default(autoincrement())
+  activityIdentity String?
   sequenceNumber   Int
   originWeekId     Int
   currentWeekId    Int
@@ -323,31 +324,34 @@ model Task {
 
   @@index([currentWeekId, sequenceNumber])
   @@index([originWeekId])
+  @@index([activityIdentity])
   @@index([contractorId, currentWeekId])
 }
 
 model PreTask {
-  id             Int                 @id @default(autoincrement())
-  sequenceNumber Int
-  originWeekId   Int
-  weekId         Int
-  contractorId   Int?
-  supervisor     String?
-  locationId     Int?
-  description    String
-  plannedStart   DateTime?
-  plannedEnd     DateTime?
-  status         String              @default("PLANNED")
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-  originWeek     Week                @relation("OriginWeekPreTasks", fields: [originWeekId], references: [id])
-  week           Week                @relation("WeekPreTasks", fields: [weekId], references: [id])
-  contractor     Contractor?         @relation(fields: [contractorId], references: [id])
-  location       Location?           @relation(fields: [locationId], references: [id])
-  plannedDays    PreTaskPlannedDay[]
+  id               Int                 @id @default(autoincrement())
+  activityIdentity String?
+  sequenceNumber   Int
+  originWeekId     Int
+  weekId           Int
+  contractorId     Int?
+  supervisor       String?
+  locationId       Int?
+  description      String
+  plannedStart     DateTime?
+  plannedEnd       DateTime?
+  status           String              @default("PLANNED")
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  originWeek       Week                @relation("OriginWeekPreTasks", fields: [originWeekId], references: [id])
+  week             Week                @relation("WeekPreTasks", fields: [weekId], references: [id])
+  contractor       Contractor?         @relation(fields: [contractorId], references: [id])
+  location         Location?           @relation(fields: [locationId], references: [id])
+  plannedDays      PreTaskPlannedDay[]
 
   @@index([weekId, sequenceNumber])
   @@index([originWeekId])
+  @@index([activityIdentity])
   @@index([contractorId, weekId])
 }
 

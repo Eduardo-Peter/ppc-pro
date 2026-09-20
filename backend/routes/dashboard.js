@@ -828,6 +828,17 @@ function getDatePartsInTimeZone(dateInput, timeZone = 'America/Sao_Paulo') {
   }
 }
 
+function getStoredDateOnlyParts(dateInput) {
+  if (!dateInput) return null;
+  const date = new Date(dateInput);
+  if (Number.isNaN(date.getTime())) return null;
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate(),
+  };
+}
+
 function utcDateFromParts(year, month, day) {
   return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 }
@@ -848,7 +859,7 @@ function nextMondayAfterUtcDate(dateInput) {
 }
 
 function calculateWeekPeriodByNumberInTimeZone(workStartDate, weekNumber, timeZone = 'America/Sao_Paulo') {
-  const startParts = getDatePartsInTimeZone(workStartDate, timeZone);
+  const startParts = getStoredDateOnlyParts(workStartDate);
   if (!startParts?.year || !startParts?.month || !startParts?.day) return null;
   const normalizedWeekNumber = Math.max(1, Number.parseInt(weekNumber, 10) || 1);
   const week1Start = utcDateFromParts(startParts.year, startParts.month, startParts.day);
@@ -929,6 +940,36 @@ function formatDeadlineLocalPartsBr(parts) {
   return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
 }
 
+function localPartsToUtcMs(parts) {
+  if (!parts) return Number.NaN;
+  return Date.UTC(
+    Number(parts.year || 0),
+    Number(parts.month || 1) - 1,
+    Number(parts.day || 1),
+    Number(parts.hour || 0),
+    Number(parts.minute || 0),
+    Number(parts.second || 0),
+    0,
+  );
+}
+
+function zonedLocalPartsToDate(parts) {
+  if (!parts) return null;
+  const timeZone = parts.timeZone || 'America/Sao_Paulo';
+  let guessMs = localPartsToUtcMs(parts);
+  if (!Number.isFinite(guessMs)) return null;
+
+  for (let i = 0; i < 4; i += 1) {
+    const actual = getDatePartsInTimeZone(new Date(guessMs), timeZone);
+    if (!actual) break;
+    const diffMs = localPartsToUtcMs(parts) - localPartsToUtcMs(actual);
+    if (diffMs === 0) return new Date(guessMs);
+    guessMs += diffMs;
+  }
+
+  return new Date(guessMs);
+}
+
 function startOfDayLocal(dateInput) {
   const date = new Date(dateInput);
   if (Number.isNaN(date.getTime())) return null;
@@ -986,35 +1027,15 @@ function calculateWeekPeriodByNumberLocal(workStartDate, weekNumber) {
 }
 
 function computeWeekDeadlineDate(week, weekdayRule, timeRule, fallbackWeekday, fallbackTime, options = {}) {
-  const scope = String(options.scope || 'CURRENT_WEEK').toUpperCase();
-  const baseWeekNumber = Math.max(1, Number.parseInt(week?.weekNumber, 10) || 1);
-  let targetWeekNumber = baseWeekNumber;
-  if (scope === 'PREVIOUS_WEEK') targetWeekNumber = Math.max(1, baseWeekNumber - 1);
-  if (scope === 'NEXT_WEEK') targetWeekNumber = Math.max(1, baseWeekNumber + 1);
-
-  const workStartDate = week?.work?.startDate || week?.startDate;
-  const targetPeriod = calculateWeekPeriodByNumberLocal(workStartDate, targetWeekNumber);
-  if (!targetPeriod) return null;
-  const start = startOfDayLocal(targetPeriod.startDate);
-  const end = new Date(targetPeriod.endDate);
-  if (!start || Number.isNaN(end.getTime())) return null;
-  end.setHours(23, 59, 59, 999);
-
-  const weekday = weekdayToJsIndex(weekdayRule) ?? weekdayToJsIndex(fallbackWeekday) ?? 5;
-  const { hour, minute } = parseTimeText(timeRule, fallbackTime);
-
-  let target = null;
-  const cursor = new Date(start);
-  while (cursor <= end) {
-    if (cursor.getDay() === weekday) {
-      target = new Date(cursor);
-      break;
-    }
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  if (!target) target = new Date(end);
-  target.setHours(hour, minute, 0, 0);
-  return target;
+  const parts = computeWeekDeadlineLocalParts(
+    week,
+    weekdayRule,
+    timeRule,
+    fallbackWeekday,
+    fallbackTime,
+    options,
+  );
+  return zonedLocalPartsToDate(parts);
 }
 
 function assignMonthForWeekByWorkdays(week) {
@@ -1127,6 +1148,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
       where: { weekId: { in: weekIds } },
       select: {
         weekId: true,
+        activityIdentity: true,
         sequenceNumber: true,
         contractorId: true,
         locationId: true,
@@ -1217,20 +1239,26 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
   let replannedTasksCount = 0;
   let plannedTasksCount = 0;
   const normalizeTextForDiff = (value) => String(value || '').trim().replace(/\s+/g, ' ').toUpperCase();
-  const normalizeDateForDiff = (value) => {
-    if (!value) return '';
-    const dt = new Date(value);
-    if (Number.isNaN(dt.getTime())) return '';
-    return dt.toISOString().slice(0, 10);
-  };
   const taskComparableSignature = (task) => ([
     Number(task?.contractorId || 0),
     Number(task?.locationId || 0),
     normalizeTextForDiff(task?.description),
-    normalizeDateForDiff(task?.plannedStart),
-    normalizeDateForDiff(task?.plannedEnd),
     normalizeTextForDiff(task?.status),
   ].join('|'));
+  const planningQualityIdentity = (task, fallbackPrefix = 'LEGACY') => (
+    task?.activityIdentity
+      ? `ID:${task.activityIdentity}`
+      : `${fallbackPrefix}:${Number(task?.contractorId || 0)}|${Number(task?.locationId || 0)}|${normalizeTextForDiff(task?.description)}`
+  );
+  const groupByPlanningQualityIdentity = (rows) => {
+    const grouped = new Map();
+    (rows || []).forEach((item) => {
+      const key = planningQualityIdentity(item);
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(item);
+    });
+    return grouped;
+  };
   const contractorReliabilityTargetPct = Number.isFinite(Number(work?.ppcTargetPct))
     ? Number(work.ppcTargetPct)
     : 80;
@@ -1632,27 +1660,27 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
     const preWeekTasks = preTasksByWeek.get(weekId) || [];
     const planningWeekTasks = (tasksByWeek.get(weekId) || []).filter((task) => task?.isUnplanned !== true);
 
-    const preBySeq = new Map((preWeekTasks || []).map((item) => [Number(item.sequenceNumber), item]));
-    const planningBySeq = new Map((planningWeekTasks || []).map((item) => [Number(item.sequenceNumber), item]));
-    const seqSet = new Set([...preBySeq.keys(), ...planningBySeq.keys()]);
+    const preByIdentity = groupByPlanningQualityIdentity(preWeekTasks);
+    const planningByIdentity = groupByPlanningQualityIdentity(planningWeekTasks);
+    const identitySet = new Set([...preByIdentity.keys(), ...planningByIdentity.keys()]);
 
     let added = 0;
     let removed = 0;
     let changed = 0;
-    [...seqSet].sort((a, b) => a - b).forEach((seq) => {
-      const preTask = preBySeq.get(seq) || null;
-      const planningTask = planningBySeq.get(seq) || null;
-      if (preTask && !planningTask) {
-        removed += 1;
-        return;
-      }
-      if (!preTask && planningTask) {
-        added += 1;
-        return;
-      }
-      if (!preTask || !planningTask) return;
-      if (taskComparableSignature(preTask) !== taskComparableSignature(planningTask)) {
-        changed += 1;
+    [...identitySet].sort().forEach((identity) => {
+      const preRows = preByIdentity.get(identity) || [];
+      const planningRows = planningByIdentity.get(identity) || [];
+      const maxRows = Math.max(preRows.length, planningRows.length);
+      for (let idx = 0; idx < maxRows; idx += 1) {
+        const preTask = preRows[idx] || null;
+        const planningTask = planningRows[idx] || null;
+        if (preTask && !planningTask) {
+          removed += 1;
+        } else if (!preTask && planningTask) {
+          added += 1;
+        } else if (preTask && planningTask && taskComparableSignature(preTask) !== taskComparableSignature(planningTask)) {
+          changed += 1;
+        }
       }
     });
 
@@ -4863,7 +4891,7 @@ router.get('/works/:workId/dashboard/reports/history/pdf', authenticate, loadUse
     yAxisLabelFontSize: 6.6,
     barValueLabelFontSize: 6.8,
   });
-  const pqText = 'Método de cálculo: Qualidade da Programação = 100% - (alterações / total de atividades programadas da semana x 100). Alterações consideradas nesta seção: atividades adicionadas, removidas/canceladas e atividades com mudanças relevantes entre a Pré-programação e a Programação final da semana.';
+  const pqText = 'Método de cálculo: Qualidade da Programação = 100% - (alterações / total de atividades programadas da semana x 100). Alterações consideradas nesta seção: atividades adicionadas, removidas/canceladas e atividades com mudanças de empreiteiro, local, descrição ou status entre a Pré-programação e a Programação final da semana. Datas previstas, dias marcados e ordem das linhas não entram nesta análise.';
   doc.fillColor(COLORS.text).font('Helvetica').fontSize(8.2)
     .text(pqText, margin + 10, y + 174, {
       width: contentWidth - 20,
@@ -7069,24 +7097,31 @@ router.get('/works/:workId/dashboard/reports/last-week/pdf', authenticate, loadU
   drawSectionTitle('4 - QUALIDADE DA PROGRAMAÇÃO');
 
   const normalizeTextForDiff = (value) => String(value || '').trim().replace(/\s+/g, ' ').toUpperCase();
-  const normalizeDateForDiff = (value) => {
-    if (!value) return '';
-    const dt = new Date(value);
-    if (Number.isNaN(dt.getTime())) return '';
-    return dt.toISOString().slice(0, 10);
-  };
   const taskComparableSignature = (task) => ([
     Number(task?.contractorId || 0),
     Number(task?.locationId || 0),
     normalizeTextForDiff(task?.description),
-    normalizeDateForDiff(task?.plannedStart),
-    normalizeDateForDiff(task?.plannedEnd),
     normalizeTextForDiff(task?.status),
   ].join('|'));
+  const planningQualityIdentity = (task, fallbackPrefix = 'LEGACY') => (
+    task?.activityIdentity
+      ? `ID:${task.activityIdentity}`
+      : `${fallbackPrefix}:${Number(task?.contractorId || 0)}|${Number(task?.locationId || 0)}|${normalizeTextForDiff(task?.description)}`
+  );
+  const groupByPlanningQualityIdentityWeekly = (rows) => {
+    const grouped = new Map();
+    (rows || []).forEach((item) => {
+      const key = planningQualityIdentity(item);
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(item);
+    });
+    return grouped;
+  };
 
   const preTasks = await prisma.preTask.findMany({
     where: { weekId: week.id },
     select: {
+      activityIdentity: true,
       sequenceNumber: true,
       contractorId: true,
       locationId: true,
@@ -7098,27 +7133,27 @@ router.get('/works/:workId/dashboard/reports/last-week/pdf', authenticate, loadU
     orderBy: { sequenceNumber: 'asc' },
   });
   const planningTasks = (tasks || []).filter((task) => task.isUnplanned !== true);
-  const preBySeq = new Map((preTasks || []).map((item) => [Number(item.sequenceNumber), item]));
-  const planningBySeq = new Map((planningTasks || []).map((item) => [Number(item.sequenceNumber), item]));
-  const seqSet = new Set([...preBySeq.keys(), ...planningBySeq.keys()]);
+  const preByIdentity = groupByPlanningQualityIdentityWeekly(preTasks);
+  const planningByIdentity = groupByPlanningQualityIdentityWeekly(planningTasks);
+  const identitySet = new Set([...preByIdentity.keys(), ...planningByIdentity.keys()]);
 
   let preVsPlanAdded = 0;
   let preVsPlanRemoved = 0;
   let preVsPlanChanged = 0;
-  [...seqSet].sort((a, b) => a - b).forEach((seq) => {
-    const preTask = preBySeq.get(seq) || null;
-    const planningTask = planningBySeq.get(seq) || null;
-    if (preTask && !planningTask) {
-      preVsPlanRemoved += 1;
-      return;
-    }
-    if (!preTask && planningTask) {
-      preVsPlanAdded += 1;
-      return;
-    }
-    if (!preTask || !planningTask) return;
-    if (taskComparableSignature(preTask) !== taskComparableSignature(planningTask)) {
-      preVsPlanChanged += 1;
+  [...identitySet].sort().forEach((identity) => {
+    const preRows = preByIdentity.get(identity) || [];
+    const planningRows = planningByIdentity.get(identity) || [];
+    const maxRows = Math.max(preRows.length, planningRows.length);
+    for (let idx = 0; idx < maxRows; idx += 1) {
+      const preTask = preRows[idx] || null;
+      const planningTask = planningRows[idx] || null;
+      if (preTask && !planningTask) {
+        preVsPlanRemoved += 1;
+      } else if (!preTask && planningTask) {
+        preVsPlanAdded += 1;
+      } else if (preTask && planningTask && taskComparableSignature(preTask) !== taskComparableSignature(planningTask)) {
+        preVsPlanChanged += 1;
+      }
     }
   });
 
@@ -7188,7 +7223,8 @@ router.get('/works/:workId/dashboard/reports/last-week/pdf', authenticate, loadU
   y += drawProgrammingQualityCards(y, section41Cards);
   const section41Text = [
     'Método de cálculo: Qualidade da Programação = 100% - (alterações / total de atividades programadas da semana x 100).',
-    'Alterações consideradas nesta seção: atividades adicionadas, removidas/canceladas e atividades com mudanças relevantes entre a Pré-programação e a Programação final da semana.',
+    'Alterações consideradas nesta seção: atividades adicionadas, removidas/canceladas e atividades com mudanças de empreiteiro, local, descrição ou status entre a Pré-programação e a Programação final da semana.',
+    'Datas previstas, dias marcados e ordem das linhas não entram nesta análise.',
     `Detalhamento da semana: adicionadas ${preVsPlanAdded}, removidas ${preVsPlanRemoved}, alteradas ${preVsPlanChanged}.`,
     'O resultado é limitado ao mínimo de 0%.',
   ].join(' ');

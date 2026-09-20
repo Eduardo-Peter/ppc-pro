@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const fs = require('fs');
+const { randomUUID } = require('crypto');
 const XLSX = require('xlsx');
 const { prisma } = require('../lib/prisma');
 const { writeAudit } = require('../lib/audit');
@@ -116,13 +117,14 @@ function taskEarliestPlannedDate(task) {
 
 function taskStatusForWeek(task, weekStartDate) {
   if (task?.isUnplanned) return 'Não planejada';
+  const status = String(task?.status || '').toUpperCase();
+  if (status === TASK_STATUS.CANCELLED) return 'Cancelada';
+  if (status === TASK_STATUS.RESERVA) return 'Reserva';
   if (Number(task.originWeekId) !== Number(task.currentWeekId)) return 'Pendente';
   const weekStart = normalizeDateOnly(weekStartDate);
   const earliest = taskEarliestPlannedDate(task);
   if (weekStart && earliest && earliest.getTime() < weekStart.getTime()) return 'Pendente';
-  const status = String(task?.status || '').toUpperCase();
   if (status === TASK_STATUS.RETRABALHO) return 'Retrabalho';
-  if (status === TASK_STATUS.RESERVA) return 'Reserva';
   return 'Planejada';
 }
 
@@ -251,10 +253,11 @@ function parseBooleanCell(value) {
 
 function planningStatusForExport(task, currentWeekId) {
   if (task?.isUnplanned) return 'Não planejada';
-  if (Number(task.originWeekId) !== Number(currentWeekId)) return 'Pendente';
   const status = String(task?.status || '').toUpperCase();
-  if (status === TASK_STATUS.RETRABALHO) return 'Retrabalho';
+  if (status === TASK_STATUS.CANCELLED) return 'Cancelada';
   if (status === TASK_STATUS.RESERVA) return 'Reserva';
+  if (Number(task.originWeekId) !== Number(currentWeekId)) return 'Pendente';
+  if (status === TASK_STATUS.RETRABALHO) return 'Retrabalho';
   return 'Programada';
 }
 
@@ -407,6 +410,7 @@ async function resequencePrePlanningTasksForWeek(weekId, tx = prisma) {
 function serializePreTask(item, weekId) {
   return {
     id: item.id,
+    activityIdentity: item.activityIdentity || null,
     sequenceNumber: item.sequenceNumber,
     originWeekId: item.originWeekId,
     currentWeekId: item.weekId,
@@ -535,6 +539,7 @@ router.post('/weeks/:weekId/tasks', authenticate, loadUser, requireWeekRoles([RO
 
   const item = await prisma.task.create({
     data: {
+      activityIdentity: randomUUID(),
       sequenceNumber: parseIntId(sequenceNumber) || (maxSeq?.sequenceNumber || 0) + 1,
       originWeekId: resolvedOriginWeekId,
       currentWeekId: req.week.id,
@@ -599,6 +604,7 @@ router.post('/weeks/:weekId/tasks/from-group', authenticate, loadUser, requireWe
 
     const row = await prisma.task.create({
       data: {
+        activityIdentity: randomUUID(),
         sequenceNumber: seq++,
         originWeekId: req.week.id,
         currentWeekId: req.week.id,
@@ -726,6 +732,7 @@ router.post('/weeks/:weekId/pre-tasks', authenticate, loadUser, requireWeekRoles
 
   const item = await prisma.preTask.create({
     data: {
+      activityIdentity: randomUUID(),
       sequenceNumber: parseIntId(sequenceNumber) || (maxSeq?.sequenceNumber || 0) + 1,
       originWeekId: resolvedOriginWeekId,
       weekId: req.week.id,
@@ -797,6 +804,7 @@ router.post('/weeks/:weekId/pre-tasks/from-group', authenticate, loadUser, requi
     // eslint-disable-next-line no-await-in-loop
     const row = await prisma.preTask.create({
       data: {
+        activityIdentity: randomUUID(),
         sequenceNumber: seq++,
         originWeekId: req.week.id,
         weekId: req.week.id,
@@ -1012,9 +1020,18 @@ router.post('/weeks/:weekId/pre-tasks/sync-to-planning', authenticate, loadUser,
     }
 
     for (const item of preTasks) {
+      const activityIdentity = item.activityIdentity || randomUUID();
+      if (!item.activityIdentity) {
+        // eslint-disable-next-line no-await-in-loop
+        await tx.preTask.update({
+          where: { id: item.id },
+          data: { activityIdentity },
+        });
+      }
       // eslint-disable-next-line no-await-in-loop
       await tx.task.create({
         data: {
+          activityIdentity,
           sequenceNumber: item.sequenceNumber,
           originWeekId: item.originWeekId || req.week.id,
           currentWeekId: req.week.id,
@@ -5036,6 +5053,7 @@ router.post('/weeks/:weekId/tasks/import/xlsx', authenticate, loadUser, requireW
       // eslint-disable-next-line no-await-in-loop
       await prisma.preTask.create({
         data: {
+          activityIdentity: randomUUID(),
           sequenceNumber,
           originWeekId,
           weekId: req.week.id,
@@ -5058,6 +5076,7 @@ router.post('/weeks/:weekId/tasks/import/xlsx', authenticate, loadUser, requireW
       // eslint-disable-next-line no-await-in-loop
       await prisma.task.create({
         data: {
+          activityIdentity: randomUUID(),
           sequenceNumber,
           originWeekId,
           currentWeekId: req.week.id,

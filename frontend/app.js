@@ -2535,6 +2535,7 @@ function taskDisplayStatusCode(task, weekContext, isDraft = false) {
   }
   if (task?.isUnplanned) return 'NAO_PLANEJADA';
   if (rawStatus === 'CANCELLED') return 'CANCELADA';
+  if (rawStatus === 'RESERVA') return 'RESERVA';
   if (Number(task?.originWeekId) !== Number(task?.currentWeekId)) return 'PENDENTE';
 
   const weekStart = dateFromKeyLocal(dateKeyLocal(weekContext?.startDate));
@@ -2542,7 +2543,6 @@ function taskDisplayStatusCode(task, weekContext, isDraft = false) {
   if (weekStart && earliestPlanned && earliestPlanned.getTime() < weekStart.getTime()) return 'PENDENTE';
 
   if (rawStatus === 'RETRABALHO') return 'RETRABALHO';
-  if (rawStatus === 'RESERVA') return 'RESERVA';
   return 'PLANEJADA';
 }
 
@@ -5234,9 +5234,9 @@ function renderSheetTaskRow(task, canEdit, _canCancel, isDraft = false) {
   const dayCells = SHEET_WEEKDAYS.map((weekday) => (
     `<input type="checkbox" class="sheet-day" data-weekday="${weekday}" ${plannedDaySet.has(weekday) ? 'checked' : ''} ${disabled} />`
   ));
-  const pendingReserveEditable = status === 'PENDENTE' && storedStatus === 'RESERVA';
-  const statusSelect = `<select class="sheet-status" ${disabled}>${sheetStatusOptionsHtml(storedStatus, pendingReserveEditable ? 'reserve-pending' : 'default')}</select>`;
-  const statusCell = (editable && status !== 'NAO_PLANEJADA' && (status !== 'PENDENTE' || pendingReserveEditable))
+  const carriedReserveEditable = Number(task.originWeekId) !== Number(task.currentWeekId) && storedStatus === 'RESERVA';
+  const statusSelect = `<select class="sheet-status" ${disabled}>${sheetStatusOptionsHtml(storedStatus, carriedReserveEditable ? 'reserve-pending' : 'default')}</select>`;
+  const statusCell = (editable && status !== 'NAO_PLANEJADA' && (status !== 'PENDENTE' || carriedReserveEditable))
     ? statusSelect
     : `<span class="status-chip status-${status}">${planningStatusLabelFromCode(status)}</span>`;
 
