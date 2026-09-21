@@ -1188,9 +1188,13 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
     }),
     prisma.weekPpcMeeting.findMany({
       where: { weekId: { in: weekIds } },
-      select: {
-        weekId: true,
-        closedAt: true,
+      include: {
+        attendances: {
+          select: {
+            contractorId: true,
+            present: true,
+          },
+        },
       },
     }),
     prisma.workPerceivedQualityConfig.findUnique({
@@ -1357,6 +1361,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
     const ensureContractorWeek = (name) => {
       if (!contractorWeek.has(name)) {
         contractorWeek.set(name, {
+          contractorId: null,
           contractor: name,
           planned: 0,
           executed: 0,
@@ -1457,6 +1462,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
       globalContractor.totalActivities += 1;
       weekContractor.planned += 1;
       globalLaborType.planned += 1;
+      if (contractorId && !weekContractor.contractorId) weekContractor.contractorId = contractorId;
 
       if (outcome === 'EXECUTED') {
         row.executed += 1;
@@ -1642,7 +1648,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
       contractorPpcWeeklyRows.push({
         weekId: Number(week.id),
         weekNumber: Number(week.weekNumber),
-        contractorId: null,
+        contractorId: Number(item.contractorId || 0) || null,
         contractor: contractorName,
         plannedBase,
         executedPlanned,
@@ -2336,6 +2342,7 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
     safetyGood: Number(qualityConfig?.safetyGoodScore ?? 8),
     cleaningRegular: Number(qualityConfig?.cleaningRegularScore ?? 5),
     cleaningGood: Number(qualityConfig?.cleaningGoodScore ?? 8),
+    presenceImpact: Number(qualityConfig?.collaborationPresenceImpactScore ?? 0),
   };
   const normalizeQualityScore = (value) => {
     if (value === null || value === undefined || value === '') return null;
@@ -2355,6 +2362,15 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
   const qualityItemByContractorWeek = new Map();
   (qualityItems || []).forEach((item) => {
     qualityItemByContractorWeek.set(`${Number(item.weekId)}::${Number(item.contractorId)}`, item);
+  });
+  const meetingPresenceByWeekContractor = new Map();
+  (ppcMeetings || []).forEach((meeting) => {
+    (meeting.attendances || []).forEach((attendance) => {
+      meetingPresenceByWeekContractor.set(
+        `${Number(meeting.weekId)}::${Number(attendance.contractorId)}`,
+        attendance.present === true,
+      );
+    });
   });
   const contractorsQualityMap = new Map();
   (contractorPpcWeeklyRows || []).forEach((row) => {
@@ -2387,7 +2403,13 @@ async function computeHistoricalDashboardSnapshot(workId, selectedWeekNumber = n
           const ppcPct = Number(ppcRow.executionPct || 0);
           const ppcScore = Number((ppcPct / 10).toFixed(2));
           const qualityScore = normalizeQualityScore(item?.qualityScore);
-          const collaborationScore = normalizeQualityScore(item?.collaborationTeamScore);
+          const collaborationTeamScore = normalizeQualityScore(item?.collaborationTeamScore);
+          const presentAtMeeting = meetingPresenceByWeekContractor.get(`${weekId}::${Number(contractor.contractorId)}`) === true;
+          const collaborationScore = computeCollaborationFinalScore(
+            collaborationTeamScore,
+            qualityThresholds.presenceImpact,
+            presentAtMeeting,
+          );
           const safetyScore = normalizeQualityScore(item?.safetyScore);
           const cleaningScore = normalizeQualityScore(item?.cleaningScore);
           return {
